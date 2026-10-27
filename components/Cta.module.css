@@ -1,0 +1,36 @@
+.section {
+  padding: 100px 0;
+}
+
+.inner {
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.heading {
+  font-size: 42px;
+  margin-bottom: 14px;
+}
+
+.sub {
+  font-size: 17px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.actions {
+  margin-bottom: 16px;
+}
+
+.note {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 768px) {
+  .heading {
+    font-size: 32px;
+  }
+}

@@ -1,0 +1,225 @@
+.section {
+  padding: 100px 0 60px;
+}
+
+.header {
+  margin-bottom: 72px;
+}
+
+.headerGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: end;
+}
+
+.heading {
+  font-size: 42px;
+}
+
+.headerBody {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 420px;
+}
+
+/* Steps */
+.steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  padding: 40px 0;
+  border-top: 1px solid var(--line);
+}
+
+.step:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.stepLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.stepNum {
+  font-size: 12px;
+  color: var(--ink-soft);
+  min-width: 20px;
+  padding-top: 14px;
+}
+
+.stepIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stepTitle {
+  font-family: var(--font-geist), system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.stepDesc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 360px;
+}
+
+.stepRight {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stepRight > * {
+  max-width: 380px;
+  width: 100%;
+}
+
+/* Profile card */
+.profileCard {
+  padding: 20px;
+}
+
+.profileTop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--human);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profileName {
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.profileHandle {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.profileTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Skill editor */
+.skillEditor {
+  padding: 16px 20px;
+  font-family: var(--font-mono), 'Geist Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.skillLine {
+  display: flex;
+  gap: 16px;
+}
+
+.lineNum {
+  color: var(--ink-soft);
+  user-select: none;
+  min-width: 20px;
+  opacity: 0.5;
+}
+
+.lineCode {
+  color: var(--ink);
+}
+
+.lineCodeHighlight {
+  background: var(--agent-tint);
+  color: var(--ink);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* Goal card */
+.goalCard {
+  padding: 20px;
+}
+
+.goalLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+
+.goalDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--agent);
+}
+
+.goalTitle {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+.goalMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.goalStatus {
+  color: var(--human);
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .headerGrid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .heading {
+    font-size: 32px;
+  }
+
+  .step {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .stepRight {
+    justify-content: flex-start;
+  }
+}
