@@ -5,6 +5,7 @@ import type { Profile, Agent, Conversation, Message, InboxItem } from '@/types/d
 const INITIAL_PROFILES: Profile[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
+    username: 'Hasan Kabir',
     name: 'Hasan Kabir',
     handle: 'hasan',
     bio: 'Building human-agent networks. Full-stack & agentic workflows.',
@@ -13,6 +14,7 @@ const INITIAL_PROFILES: Profile[] = [
   },
   {
     id: '00000000-0000-0000-0000-000000000002',
+    username: 'Elena Rostova',
     name: 'Elena Rostova',
     handle: 'elena_r',
     bio: 'Distributed systems engineer. Exploring collaborative multi-agent protocols.',
@@ -21,6 +23,7 @@ const INITIAL_PROFILES: Profile[] = [
   },
   {
     id: '00000000-0000-0000-0000-000000000003',
+    username: 'Marcus Chen',
     name: 'Marcus Chen',
     handle: 'marcusc',
     bio: 'Founder at LatentSpace. Seeking backend engineers & early pilot partners.',
@@ -29,6 +32,7 @@ const INITIAL_PROFILES: Profile[] = [
   },
   {
     id: '00000000-0000-0000-0000-000000000004',
+    username: 'Aria Patel',
     name: 'Aria Patel',
     handle: 'ariap',
     bio: 'ML researcher working on agent alignment and tool use evaluation.',
@@ -233,10 +237,20 @@ export const db = {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
       if (error || !data) return null;
-      return data as Profile;
+      return {
+        ...data,
+        username: data.username || data.name || 'Member',
+        name: data.username || data.name || 'Member',
+      } as Profile;
     }
     const profiles = localDb.getProfiles();
-    return profiles.find((p) => p.id === id) || null;
+    const found = profiles.find((p) => p.id === id);
+    if (!found) return null;
+    return {
+      ...found,
+      username: found.username || found.name || 'Member',
+      name: found.username || found.name || 'Member',
+    };
   },
 
   async getProfileByHandle(handle: string): Promise<Profile | null> {
@@ -244,24 +258,44 @@ export const db = {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.from('profiles').select('*').ilike('handle', clean).single();
       if (error || !data) return null;
-      return data as Profile;
+      return {
+        ...data,
+        username: data.username || data.name || 'Member',
+        name: data.username || data.name || 'Member',
+      } as Profile;
     }
     const profiles = localDb.getProfiles();
-    return profiles.find((p) => p.handle.toLowerCase() === clean) || null;
+    const found = profiles.find((p) => p.handle.toLowerCase() === clean);
+    if (!found) return null;
+    return {
+      ...found,
+      username: found.username || found.name || 'Member',
+      name: found.username || found.name || 'Member',
+    };
   },
 
   async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
+    const payload = { ...updates };
+    if (payload.name && !payload.username) {
+      payload.username = payload.name;
+    }
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('profiles').update(updates).eq('id', id).select().single();
+      const { data, error } = await supabase.from('profiles').update(payload).eq('id', id).select().single();
       if (error) throw error;
-      return data as Profile;
+      return {
+        ...data,
+        username: data.username || data.name || 'Member',
+        name: data.username || data.name || 'Member',
+      } as Profile;
     }
     const profiles = localDb.getProfiles();
     const index = profiles.findIndex((p) => p.id === id);
+    const resolvedUsername = payload.username || payload.name || 'Member';
     if (index === -1) {
       const created: Profile = {
         id,
-        name: updates.name || 'Member',
+        username: resolvedUsername,
+        name: resolvedUsername,
         handle: updates.handle || `user_${id.slice(0, 6)}`,
         bio: updates.bio || '',
         looking_for: updates.looking_for || [],
@@ -270,7 +304,12 @@ export const db = {
       localDb.setProfiles([...profiles, created]);
       return created;
     }
-    const updated = { ...profiles[index], ...updates };
+    const updated = { 
+      ...profiles[index], 
+      ...payload,
+      username: resolvedUsername,
+      name: resolvedUsername,
+    };
     profiles[index] = updated;
     localDb.setProfiles([...profiles]);
     return updated;
@@ -280,9 +319,13 @@ export const db = {
     if (isSupabaseConfigured && supabase) {
       let q = supabase.from('profiles').select('*');
       if (tag) q = q.contains('looking_for', [tag]);
-      if (query) q = q.or(`name.ilike.%${query}%,bio.ilike.%${query}%,handle.ilike.%${query}%`);
+      if (query) q = q.or(`username.ilike.%${query}%,bio.ilike.%${query}%,handle.ilike.%${query}%`);
       const { data } = await q;
-      return (data || []) as Profile[];
+      return ((data || []) as any[]).map((p) => ({
+        ...p,
+        username: p.username || p.name || 'Member',
+        name: p.username || p.name || 'Member',
+      })) as Profile[];
     }
     let list = localDb.getProfiles();
     if (tag) {
@@ -291,7 +334,8 @@ export const db = {
     if (query) {
       const q = query.toLowerCase();
       list = list.filter((p) =>
-        p.name.toLowerCase().includes(q) ||
+        (p.username && p.username.toLowerCase().includes(q)) ||
+        (p.name && p.name.toLowerCase().includes(q)) ||
         p.handle.toLowerCase().includes(q) ||
         p.bio.toLowerCase().includes(q)
       );

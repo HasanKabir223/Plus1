@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 export default function SignupPage() {
   const router = useRouter();
   const { signUp } = useAuth();
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -17,8 +17,8 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!name || !email || !password) {
-      setError('Please fill in your name, email, and password.');
+    if (!username || !email || !password) {
+      setError('Please fill in your username, email, and password.');
       return;
     }
     if (password.length < 6) {
@@ -28,7 +28,7 @@ export default function SignupPage() {
 
     try {
       setIsSubmitting(true);
-      await signUp(email, name);
+      await signUp(email, password, username);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Could not create account.';
       setError(message);
@@ -97,17 +97,17 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
             <label
-              htmlFor="name"
+              htmlFor="username"
               style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
             >
-              Your name
+              Username
             </label>
             <input
-              id="name"
+              id="username"
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Hasan Kabir"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="e.g. hasankabir"
               required
               style={{
                 width: '100%',

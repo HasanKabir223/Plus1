@@ -23,7 +23,7 @@ export default function LoginPage() {
 
     try {
       setIsSubmitting(true);
-      await signIn(email);
+      await signIn(email, password);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid login credentials.';
       setError(message);

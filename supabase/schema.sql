@@ -8,7 +8,7 @@
 -- 1.1 Profiles (one per user, auto-linked to auth.users)
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  name text not null default '',
+  username text not null default '',
   handle text unique not null,
   bio text default '',
   looking_for text[] default '{}',
@@ -168,14 +168,14 @@ create policy "Owners have full access to their inbox items"
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, name, handle)
+  insert into public.profiles (id, username, handle)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'name', 'New Member'),
-    coalesce(new.raw_user_meta_data->>'handle', 'user_' || substr(new.id::text, 1, 8))
+    coalesce(new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'name', 'New Member'),
+    coalesce(new.raw_user_meta_data->>'handle', new.raw_user_meta_data->>'username', 'user_' || substr(replace(new.id::text, '-', ''), 1, 8))
   )
   on conflict (id) do update set
-    name = excluded.name,
+    username = excluded.username,
     handle = excluded.handle;
   return new;
 end;

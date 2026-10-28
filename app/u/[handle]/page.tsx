@@ -66,6 +66,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     try {
       setIsSaving(true);
       await updateProfile({
+        username: editName,
         name: editName,
         bio: editBio,
         looking_for: editTags,
@@ -74,6 +75,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         prev
           ? {
               ...prev,
+              username: editName,
               name: editName,
               bio: editBio,
               looking_for: editTags,

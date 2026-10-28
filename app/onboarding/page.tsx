@@ -19,7 +19,7 @@ const SUGGESTED_TAGS = [
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, profile, updateProfile } = useAuth();
-  const [name, setName] = useState(profile?.name || '');
+  const [username, setUsername] = useState(profile?.username || profile?.name || '');
   const [handle, setHandle] = useState(profile?.handle || '');
   const [bio, setBio] = useState(profile?.bio || '');
   const [selectedTags, setSelectedTags] = useState<string[]>(profile?.looking_for || []);
@@ -29,7 +29,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (profile) {
-      if (!name) setName(profile.name);
+      if (!username) setUsername(profile.username || profile.name || '');
       if (!handle) setHandle(profile.handle);
       if (!bio) setBio(profile.bio);
       if (selectedTags.length === 0 && profile.looking_for) setSelectedTags(profile.looking_for);
@@ -80,12 +80,13 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (handleError || !name.trim() || !handle.trim()) return;
+    if (handleError || !username.trim() || !handle.trim()) return;
 
     try {
       setIsSaving(true);
       await updateProfile({
-        name: name.trim(),
+        username: username.trim(),
+        name: username.trim(),
         handle: handle.trim().toLowerCase(),
         bio: bio.trim(),
         looking_for: selectedTags,
@@ -129,17 +130,17 @@ export default function OnboardingPage() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label
-              htmlFor="name"
+              htmlFor="username"
               style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
             >
-              Full name
+              Username
             </label>
             <input
-              id="name"
+              id="username"
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Hasan Kabir"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="e.g. hasankabir"
               required
               style={{
                 width: '100%',
