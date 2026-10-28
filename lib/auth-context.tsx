@@ -11,7 +11,7 @@ interface AuthContextType {
   profile: Profile | null;
   isLoading: boolean;
   signIn: (email: string, password?: string) => Promise<void>;
-  signUp: (email: string, password?: string, username?: string) => Promise<void>;
+  signUp: (email: string, password?: string, username?: string) => Promise<{ requiresEmailConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
 }
@@ -156,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password?: string, username?: string) => {
+  const signUp = async (email: string, password?: string, username?: string): Promise<{ requiresEmailConfirmation?: boolean }> => {
     setIsLoading(true);
     try {
       const cleanUsername = username?.trim() || email.split('@')[0];
@@ -176,28 +176,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (error) {
-          throw new Error(error.message);
+          throw error;
         }
 
         if (data.user) {
+          // If Supabase has email confirmation enabled, session will be null
+          if (!data.session) {
+            return { requiresEmailConfirmation: true };
+          }
+
           const u = { id: data.user.id, email: data.user.email || email };
           setUser(u);
           localStorage.setItem('plus1_session_user_id', data.user.id);
 
-          // Wait briefly for handle_new_user trigger to populate public.profiles
-          let p = await db.getProfile(data.user.id);
-          if (!p) {
-            p = await db.updateProfile(data.user.id, {
-              username: cleanUsername,
-              name: cleanUsername,
-              handle: cleanHandle,
-              bio: '',
-              looking_for: [],
-            });
-          }
+          const p = await db.getProfile(data.user.id);
           setProfile(p);
           router.push('/onboarding');
-          return;
+          return { requiresEmailConfirmation: false };
         }
       }
 
@@ -214,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser({ id: created.id, email });
       setProfile(created);
       router.push('/onboarding');
+      return { requiresEmailConfirmation: false };
     } finally {
       setIsLoading(false);
     }

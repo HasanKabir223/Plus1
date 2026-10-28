@@ -25,7 +25,12 @@ export default function LoginPage() {
       setIsSubmitting(true);
       await signIn(email, password);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid login credentials.';
+      let message = 'Invalid login credentials.';
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        message = String((err as any).message);
+      }
       setError(message);
     } finally {
       setIsSubmitting(false);

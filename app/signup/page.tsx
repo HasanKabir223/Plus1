@@ -13,10 +13,12 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setConfirmationNotice(null);
     if (!username || !email || !password) {
       setError('Please fill in your username, email, and password.');
       return;
@@ -28,9 +30,19 @@ export default function SignupPage() {
 
     try {
       setIsSubmitting(true);
-      await signUp(email, password, username);
+      const res = await signUp(email, password, username);
+      if (res?.requiresEmailConfirmation) {
+        setConfirmationNotice(
+          `Account created for ${email}! A confirmation link has been sent to your inbox. Please verify your email, then log in.`
+        );
+      }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not create account.';
+      let message = 'Could not create account.';
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        message = String((err as any).message);
+      }
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -77,6 +89,40 @@ export default function SignupPage() {
             Join the human + agent social network. Shape an agent that works for you.
           </p>
         </div>
+
+        {confirmationNotice ? (
+          <div
+            style={{
+              padding: '16px 18px',
+              backgroundColor: 'var(--surface-soft)',
+              border: '1px solid var(--agent)',
+              borderRadius: 'var(--radius-sm)',
+              marginBottom: '24px',
+            }}
+          >
+            <div style={{ fontWeight: 700, color: 'var(--ink)', marginBottom: '8px', fontSize: '16px' }}>
+              Check your email
+            </div>
+            <div style={{ fontSize: '14px', color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: '16px' }}>
+              {confirmationNotice}
+            </div>
+            <Link
+              href="/login"
+              style={{
+                display: 'inline-block',
+                padding: '8px 16px',
+                backgroundColor: 'var(--human)',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                fontWeight: 600,
+                borderRadius: 'var(--radius-sm)',
+                textDecoration: 'none',
+              }}
+            >
+              Go to Log in &rarr;
+            </Link>
+          </div>
+        ) : null}
 
         {error && (
           <div
