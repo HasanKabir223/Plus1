@@ -64,3 +64,12 @@ desktop.ini
 # Agent and DB local artifacts
 .agents/
 databases/
+supabase/.temp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+

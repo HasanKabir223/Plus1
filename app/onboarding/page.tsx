@@ -100,26 +100,8 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: 'var(--paper)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '520px',
-          border: '1px solid var(--line)',
-          borderRadius: 'var(--radius-md)',
-          padding: '36px 32px',
-          backgroundColor: 'var(--paper)',
-        }}
-      >
+    <div className="auth-wrapper">
+      <div className="auth-card" style={{ maxWidth: '520px' }}>
         <div style={{ marginBottom: '24px' }}>
           <div
             style={{

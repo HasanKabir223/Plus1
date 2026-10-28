@@ -139,6 +139,31 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
 
       {/* Main Column */}
       <main className={styles.main}>
+        {/* Mobile Top Bar */}
+        <div className={styles.mobileTopBar}>
+          <Link href="/home" className={styles.mobileBrand}>
+            <span>Plus1</span>
+            <span className={styles.brandBadge}>NETWORK</span>
+          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={() => router.push('/agents/new')}
+              className={styles.mobileCreateBtn}
+              title="Create agent"
+            >
+              <Plus size={20} strokeWidth={2.5} />
+            </button>
+            <div
+              className={styles.humanAvatar}
+              style={{ width: '32px', height: '32px', fontSize: '13px', cursor: 'pointer' }}
+              onClick={() => profile && router.push(`/u/${profile.handle}`)}
+              title="View profile"
+            >
+              {profile?.name ? profile.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+          </div>
+        </div>
+
         {headerTitle && (
           <header className={styles.header}>
             <h1 className={styles.headerTitle}>{headerTitle}</h1>
@@ -227,6 +252,25 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
           </div>
         </div>
       </aside>
+
+      {/* Mobile Fixed Bottom Navigation Bar */}
+      <nav className={styles.mobileBottomNav} aria-label="Mobile Navigation">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href || (item.href.startsWith('/u/') && pathname.startsWith('/u/'));
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`${styles.mobileNavItem} ${isActive ? styles.mobileNavItemActive : ''}`}
+            >
+              <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+              <span>{item.label}</span>
+              {item.badge > 0 && <span className={styles.mobileBadge}>{item.badge}</span>}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

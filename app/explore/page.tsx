@@ -60,7 +60,7 @@ export default function ExplorePage() {
     <AppShell headerTitle="Explore">
       <div>
         {/* Search Bar & Tabs Header */}
-        <div style={{ borderBottom: '1px solid var(--line)', padding: '16px 20px' }}>
+        <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
           <form onSubmit={handleSearchSubmit} style={{ marginBottom: '14px' }}>
             <div
               style={{
@@ -73,7 +73,7 @@ export default function ExplorePage() {
                 padding: '8px 14px',
               }}
             >
-              <Search size={16} color="var(--ink-soft)" />
+              <Search size={16} color="var(--ink-soft)" style={{ flexShrink: 0 }} />
               <input
                 type="text"
                 placeholder={activeTab === 'people' ? 'Search people by name, bio, or handle...' : 'Search agents by name or personality...'}
@@ -95,7 +95,7 @@ export default function ExplorePage() {
                     setSearchQuery('');
                     fetchData();
                   }}
-                  style={{ fontSize: '12px', color: 'var(--ink-soft)', cursor: 'pointer' }}
+                  style={{ fontSize: '12px', color: 'var(--ink-soft)', cursor: 'pointer', flexShrink: 0 }}
                 >
                   Clear
                 </button>
@@ -146,12 +146,13 @@ export default function ExplorePage() {
         {activeTab === 'people' && (
           <div
             style={{
-              padding: '12px 20px',
+              padding: '10px 14px',
               borderBottom: '1px solid var(--line)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
           >
             <Tag size={14} color="var(--ink-soft)" style={{ flexShrink: 0 }} />
@@ -186,7 +187,7 @@ export default function ExplorePage() {
         )}
 
         {/* Content Rows */}
-        <div style={{ padding: '0 20px' }}>
+        <div style={{ padding: '0 14px' }}>
           {isLoading ? (
             <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-soft)', fontSize: '14px' }}>
               Searching {activeTab}...
@@ -204,6 +205,8 @@ export default function ExplorePage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -220,7 +223,7 @@ export default function ExplorePage() {
           ) : activeTab === 'people' ? (
             profiles.length === 0 ? (
               /* Empty state: No people for filter */
-              <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+              <div style={{ padding: '48px 16px', textAlign: 'center' }}>
                 <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
                   No members found matching &ldquo;{selectedTag !== 'all' ? selectedTag : searchQuery}&rdquo;.
                 </p>
@@ -248,12 +251,13 @@ export default function ExplorePage() {
                       display: 'flex',
                       alignItems: 'flex-start',
                       justifyContent: 'space-between',
-                      gap: '16px',
+                      gap: '12px',
                       padding: '16px 0',
                       borderBottom: '1px solid var(--line)',
+                      flexWrap: 'wrap',
                     }}
                   >
-                    <div style={{ display: 'flex', gap: '14px', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: '12px', flex: '1 1 200px', minWidth: 0 }}>
                       {/* Human Avatar: circle per theme.md */}
                       <div
                         style={{
@@ -275,7 +279,7 @@ export default function ExplorePage() {
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
                           <Link
                             href={`/u/${p.handle}`}
                             style={{
@@ -283,6 +287,7 @@ export default function ExplorePage() {
                               fontWeight: 700,
                               color: 'var(--ink)',
                               textDecoration: 'none',
+                              wordBreak: 'break-word',
                             }}
                           >
                             {p.name}
@@ -299,7 +304,7 @@ export default function ExplorePage() {
                         </div>
 
                         {p.bio && (
-                          <p style={{ fontSize: '13px', color: 'var(--ink)', marginBottom: '8px', lineHeight: 1.45 }}>
+                          <p style={{ fontSize: '13px', color: 'var(--ink)', marginBottom: '8px', lineHeight: 1.45, wordBreak: 'break-word' }}>
                             {p.bio}
                           </p>
                         )}
@@ -330,7 +335,7 @@ export default function ExplorePage() {
                     <Link
                       href={`/u/${p.handle}`}
                       className="btn-secondary"
-                      style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0 }}
+                      style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0, alignSelf: 'flex-start' }}
                     >
                       View profile
                     </Link>
@@ -340,7 +345,7 @@ export default function ExplorePage() {
             )
           ) : agents.length === 0 ? (
             /* Empty state: No agents */
-            <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+            <div style={{ padding: '48px 16px', textAlign: 'center' }}>
               <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>
                 No agents found.
               </p>
@@ -365,12 +370,13 @@ export default function ExplorePage() {
                     display: 'flex',
                     alignItems: 'flex-start',
                     justifyContent: 'space-between',
-                    gap: '16px',
+                    gap: '12px',
                     padding: '16px 0',
                     borderBottom: '1px solid var(--line)',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: '14px', flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: '12px', flex: '1 1 200px', minWidth: 0 }}>
                     {/* Agent Avatar: rounded square (8px radius) in --agent */}
                     <div
                       style={{
@@ -392,7 +398,7 @@ export default function ExplorePage() {
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <Link
                           href={`/agents/${agent.id}`}
                           style={{
@@ -400,6 +406,7 @@ export default function ExplorePage() {
                             fontWeight: 700,
                             color: 'var(--ink)',
                             textDecoration: 'none',
+                            wordBreak: 'break-word',
                           }}
                         >
                           {agent.name}
@@ -423,7 +430,7 @@ export default function ExplorePage() {
                         </span>
                       </div>
 
-                      <p style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.45, marginBottom: '6px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.45, marginBottom: '6px', wordBreak: 'break-word' }}>
                         {agent.personality}
                       </p>
                     </div>
@@ -432,7 +439,7 @@ export default function ExplorePage() {
                   <Link
                     href={`/agents/${agent.id}`}
                     className="btn-secondary"
-                    style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0 }}
+                    style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0, alignSelf: 'flex-start' }}
                   >
                     View agent
                   </Link>

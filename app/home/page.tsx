@@ -138,13 +138,15 @@ export default function HomePage() {
         {/* ============================================================ */}
         {/* SECTION 1: AGENT STATUS STRIP                                */}
         {/* ============================================================ */}
-        <section style={{ borderBottom: '1px solid var(--line)', padding: '20px' }}>
+        <section className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               marginBottom: '14px',
+              flexWrap: 'wrap',
+              gap: '8px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -193,6 +195,8 @@ export default function HomePage() {
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--err)',
                 fontSize: '13px',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -217,7 +221,7 @@ export default function HomePage() {
             /* Empty state 1: No agents */
             <div
               style={{
-                padding: '24px',
+                padding: '24px 16px',
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
                 borderRadius: 'var(--radius-sm)',
@@ -244,13 +248,15 @@ export default function HomePage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '12px 16px',
+                    padding: '12px 14px',
                     backgroundColor: 'var(--surface)',
                     border: '1px solid var(--line)',
                     borderRadius: 'var(--radius-sm)',
+                    flexWrap: 'wrap',
+                    gap: '10px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: '1 1 180px' }}>
                     {/* Agent avatar: rounded square in --agent */}
                     <div
                       style={{
@@ -265,11 +271,12 @@ export default function HomePage() {
                         fontSize: '13px',
                         fontWeight: 700,
                         color: 'var(--ink)',
+                        flexShrink: 0,
                       }}
                     >
                       {agent.name.charAt(0)}
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <Link
                         href={`/agents/${agent.id}`}
                         style={{
@@ -277,6 +284,8 @@ export default function HomePage() {
                           fontWeight: 700,
                           color: 'var(--ink)',
                           textDecoration: 'none',
+                          wordBreak: 'break-word',
+                          display: 'block',
                         }}
                       >
                         {agent.name}
@@ -297,7 +306,7 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                     {/* Active / Paused switch */}
                     <button
                       onClick={() => handleToggleStatus(agent)}
@@ -356,13 +365,15 @@ export default function HomePage() {
         {/* ============================================================ */}
         {/* SECTION 2: INBOX (AGENT REPORTS TO OWNER)                    */}
         {/* ============================================================ */}
-        <section id="inbox" style={{ borderBottom: '1px solid var(--line)', padding: '20px' }}>
+        <section id="inbox" className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               marginBottom: '14px',
+              flexWrap: 'wrap',
+              gap: '8px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -417,6 +428,8 @@ export default function HomePage() {
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--err)',
                 fontSize: '13px',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <span>{inboxError}</span>
@@ -428,7 +441,7 @@ export default function HomePage() {
             /* Empty state 2: No inbox results */
             <div
               style={{
-                padding: '32px 20px',
+                padding: '32px 16px',
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
                 borderRadius: 'var(--radius-sm)',
@@ -463,16 +476,16 @@ export default function HomePage() {
                     display: 'flex',
                     alignItems: 'flex-start',
                     justifyContent: 'space-between',
-                    gap: '14px',
-                    padding: '16px 0',
+                    gap: '12px',
+                    padding: '14px 2px',
                     borderBottom: '1px solid var(--line)',
                     cursor: item.conversation_id ? 'pointer' : 'default',
                     transition: 'background-color 100ms ease',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: 0 }}>
                     {/* Unread marker */}
-                    <div style={{ paddingTop: '5px' }}>
+                    <div style={{ paddingTop: '5px', flexShrink: 0 }}>
                       <span
                         style={{
                           display: 'block',
@@ -513,6 +526,7 @@ export default function HomePage() {
                           color: 'var(--ink)',
                           fontWeight: item.status === 'unread' ? 600 : 400,
                           marginBottom: '8px',
+                          wordBreak: 'break-word',
                         }}
                       >
                         {item.summary}
@@ -527,6 +541,7 @@ export default function HomePage() {
                             fontSize: '12px',
                             fontWeight: 600,
                             color: 'var(--human)',
+                            wordBreak: 'break-word',
                           }}
                         >
                           <span>Open conversation thread</span>
@@ -543,6 +558,7 @@ export default function HomePage() {
                       color: 'var(--ink-soft)',
                       borderRadius: '4px',
                       cursor: 'pointer',
+                      flexShrink: 0,
                     }}
                     title="Dismiss"
                   >
@@ -557,13 +573,15 @@ export default function HomePage() {
         {/* ============================================================ */}
         {/* SECTION 3: LIVE THREADS                                      */}
         {/* ============================================================ */}
-        <section style={{ padding: '20px' }}>
+        <section className="screen-section">
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               marginBottom: '14px',
+              flexWrap: 'wrap',
+              gap: '8px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -618,6 +636,8 @@ export default function HomePage() {
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--err)',
                 fontSize: '13px',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <span>{threadsError}</span>
@@ -629,7 +649,7 @@ export default function HomePage() {
             /* Empty state 3: No live threads */
             <div
               style={{
-                padding: '24px',
+                padding: '24px 16px',
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
                 borderRadius: 'var(--radius-sm)',
@@ -654,14 +674,16 @@ export default function HomePage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '14px 16px',
+                    padding: '12px 4px',
                     borderBottom: '1px solid var(--line)',
                     cursor: 'pointer',
                     transition: 'background-color 100ms ease',
+                    flexWrap: 'wrap',
+                    gap: '10px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: '1 1 200px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                       {/* Initiator agent badge */}
                       <div
                         style={{
@@ -701,8 +723,8 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', wordBreak: 'break-word' }}>
                         {thread.initiator?.name || 'Agent'} and {thread.target?.name || 'Peer'}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
@@ -711,7 +733,7 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
                     {thread.status === 'live' && (
                       <span
                         style={{

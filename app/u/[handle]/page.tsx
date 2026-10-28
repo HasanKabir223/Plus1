@@ -130,13 +130,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     <AppShell headerTitle={`@${profile.handle}`}>
       <div>
         {/* Profile Header Block */}
-        <div style={{ borderBottom: '1px solid var(--line)', padding: '24px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
             {/* Human Avatar: circle per theme.md */}
             <div
               style={{
-                width: '64px',
-                height: '64px',
+                width: '60px',
+                height: '60px',
                 borderRadius: '50%',
                 backgroundColor: 'var(--human-tint)',
                 color: 'var(--human)',
@@ -146,6 +146,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 justifyContent: 'center',
                 fontSize: '24px',
                 fontWeight: 700,
+                flexShrink: 0,
               }}
             >
               {profile.name.charAt(0).toUpperCase()}
@@ -165,8 +166,8 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           {!isEditing ? (
             /* Normal View */
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)' }}>{profile.name}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>{profile.name}</h1>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--ink-soft)' }}>
                   @{profile.handle}
                 </span>
@@ -178,7 +179,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               </div>
 
               {profile.bio ? (
-                <p style={{ fontSize: '14px', color: 'var(--ink)', lineHeight: 1.5, marginBottom: '14px' }}>
+                <p style={{ fontSize: '14px', color: 'var(--ink)', lineHeight: 1.5, marginBottom: '14px', wordBreak: 'break-word' }}>
                   {profile.bio}
                 </p>
               ) : (
@@ -260,14 +261,14 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
                   Looking for tags
                 </label>
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
                   <input
                     type="text"
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     placeholder="e.g. hackathon"
                     style={{
-                      flex: 1,
+                      flex: '1 1 160px',
                       padding: '6px 10px',
                       borderRadius: 'var(--radius-sm)',
                       border: '1px solid var(--line)',
@@ -307,7 +308,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
                 <button
                   type="submit"
                   disabled={isSaving}
@@ -330,8 +331,8 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         </div>
 
         {/* Owned Agents Section */}
-        <div style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div className="screen-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 700 }}>
                 {isOwner ? 'Your deployed agents' : `${profile.name}'s agents`}
@@ -351,7 +352,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           {agents.length === 0 ? (
             <div
               style={{
-                padding: '32px 20px',
+                padding: '32px 16px',
                 backgroundColor: 'var(--surface)',
                 border: '1px solid var(--line)',
                 borderRadius: 'var(--radius-sm)',
@@ -378,11 +379,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '14px 0',
+                    padding: '12px 0',
                     borderBottom: '1px solid var(--line)',
+                    flexWrap: 'wrap',
+                    gap: '10px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: '1 1 180px' }}>
                     {/* Agent avatar: rounded square in --agent */}
                     <div
                       style={{
@@ -397,12 +400,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                         fontWeight: 700,
                         fontSize: '14px',
                         color: 'var(--ink)',
+                        flexShrink: 0,
                       }}
                     >
                       {agent.name.charAt(0)}
                     </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <Link
                           href={`/agents/${agent.id}`}
                           style={{
@@ -410,6 +414,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                             fontWeight: 700,
                             color: 'var(--ink)',
                             textDecoration: 'none',
+                            wordBreak: 'break-word',
                           }}
                         >
                           {agent.name}
@@ -431,7 +436,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                   <Link
                     href={`/agents/${agent.id}`}
                     className="btn-secondary"
-                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                    style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0 }}
                   >
                     View agent
                   </Link>

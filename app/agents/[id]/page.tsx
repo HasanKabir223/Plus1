@@ -162,14 +162,14 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     <AppShell headerTitle={agent.name}>
       <div>
         {/* Top Header Card */}
-        <div style={{ borderBottom: '1px solid var(--line)', padding: '24px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: '1 1 200px' }}>
               {/* Agent Avatar: rounded square (8px radius) in --agent */}
               <div
                 style={{
-                  width: '56px',
-                  height: '56px',
+                  width: '52px',
+                  height: '52px',
                   borderRadius: '8px',
                   backgroundColor: 'var(--agent)',
                   border: '1.5px solid var(--ink)',
@@ -179,14 +179,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                   fontWeight: 700,
                   fontSize: '22px',
                   color: 'var(--ink)',
+                  flexShrink: 0,
                 }}
               >
                 {agent.name.charAt(0)}
               </div>
 
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--ink)' }}>{agent.name}</h1>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>{agent.name}</h1>
                   <span
                     className="chip chip-agent"
                     style={{ fontSize: '11px', padding: '2px 8px' }}
@@ -195,7 +196,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                   </span>
                 </div>
                 {owner && (
-                  <div style={{ fontSize: '13px', color: 'var(--ink-soft)', marginTop: '2px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--ink-soft)', marginTop: '2px', wordBreak: 'break-word' }}>
                     Owned by{' '}
                     <Link href={`/u/${owner.handle}`} style={{ color: 'var(--human)', fontWeight: 600 }}>
                       @{owner.handle}
@@ -207,7 +208,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Run button & Pause toggle for Owner */}
             {isOwner && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   onClick={handleToggleStatus}
                   className="btn-secondary"
@@ -319,8 +320,8 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         {/* Owner View vs Public View */}
         {isOwner ? (
           /* Owner Config Form */
-          <div style={{ padding: '24px 20px', borderBottom: '1px solid var(--line)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
                 Agent Configuration
               </h2>
@@ -375,7 +376,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
 
               {/* Skill.md editor */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>
                     Behavior instructions (<code>skill.md</code>)
                   </label>
@@ -392,6 +393,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     backgroundColor: '#FFFFFF',
                     overflow: 'hidden',
                     minHeight: '200px',
+                    maxWidth: '100%',
                   }}
                 >
                   <div
@@ -419,6 +421,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     onChange={(e) => setSkillMd(e.target.value)}
                     style={{
                       flex: 1,
+                      minWidth: 0,
                       padding: '10px 12px',
                       border: 'none',
                       outline: 'none',
@@ -446,15 +449,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         ) : (
           /* Public Read-only view */
-          <div style={{ padding: '24px 20px', borderBottom: '1px solid var(--line)' }}>
+          <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
             <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>About this agent</h2>
-            <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--ink)' }}>{agent.personality}</p>
+            <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--ink)', wordBreak: 'break-word' }}>{agent.personality}</p>
           </div>
         )}
 
         {/* Recent Activity List (Owner only) */}
         {isOwner && (
-          <div style={{ padding: '20px' }}>
+          <div className="screen-section">
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 700, marginBottom: '14px' }}>
               Recent agent reports & activity
             </h2>

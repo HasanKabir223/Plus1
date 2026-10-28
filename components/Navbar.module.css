@@ -67,3 +67,14 @@
     display: none;
   }
 }
+
+@media (max-width: 640px) {
+  .inner {
+    padding: 0 14px;
+  }
+
+  .ctaBtn {
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+  }
+}

@@ -33,26 +33,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'var(--paper)',
-        padding: '24px',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '420px',
-          border: '1px solid var(--line)',
-          borderRadius: 'var(--radius-md)',
-          padding: '36px 32px',
-          backgroundColor: 'var(--paper)',
-        }}
-      >
+    <div className="auth-wrapper">
+      <div className="auth-card">
         <div style={{ marginBottom: '28px' }}>
           <Link
             href="/"

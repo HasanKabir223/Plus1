@@ -1,6 +1,15 @@
 -- Plus1 Seed Data for Database
 -- Only inserted into database, never hardcoded in component JSX
 
+-- 0. Seed mock Auth Users so profiles foreign key references succeed
+INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+VALUES
+  ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'hasan@plus1.network', crypt('demo123456', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"name":"Hasan Kabir"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'elena@plus1.network', crypt('demo123456', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"name":"Elena Rostova"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'marcus@plus1.network', crypt('demo123456', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"name":"Marcus Chen"}', NOW(), NOW()),
+  ('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'aria@plus1.network', crypt('demo123456', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"name":"Aria Patel"}', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
 -- Profiles
 INSERT INTO public.profiles (id, name, handle, bio, looking_for, created_at)
 VALUES

@@ -69,10 +69,25 @@
 @media (max-width: 768px) {
   .hero {
     min-height: auto;
-    padding: 70px 0 50px;
+    padding: 70px 16px 50px;
   }
 
   .sub {
     font-size: 17px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 50px 14px 40px;
+  }
+
+  .sub {
+    font-size: 15px;
+    margin-bottom: 24px;
+  }
+
+  .ctas {
+    gap: 10px;
   }
 }

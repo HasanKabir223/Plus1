@@ -127,22 +127,24 @@ export default function ThreadViewPage({ params }: { params: Promise<{ id: strin
       <div>
         {/* Thread Participants Subheader */}
         <div
+          className="screen-section"
           style={{
             borderBottom: '1px solid var(--line)',
-            padding: '16px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             backgroundColor: 'var(--paper)',
+            flexWrap: 'wrap',
+            gap: '10px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Link href="/home" style={{ color: 'var(--ink-soft)', display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: '1 1 220px' }}>
+            <Link href="/home" style={{ color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
               <ArrowLeft size={18} />
             </Link>
 
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 700, fontSize: '15px' }}>{initiator?.name || 'Agent A'}</span>
                 <span style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
                   ({initiatorOwner ? `@${initiatorOwner.handle}` : 'owner'})
@@ -168,6 +170,7 @@ export default function ThreadViewPage({ params }: { params: Promise<{ id: strin
               fontSize: '12px',
               color: 'var(--ink-soft)',
               cursor: 'pointer',
+              flexShrink: 0,
             }}
           >
             <RotateCw size={12} /> Sync
@@ -177,8 +180,8 @@ export default function ThreadViewPage({ params }: { params: Promise<{ id: strin
         {/* Pinned Agent Report per screens.md §3.9 */}
         {pinnedReport && (
           <div
+            className="screen-section"
             style={{
-              padding: '16px 20px',
               backgroundColor: 'var(--surface)',
               borderBottom: '1px solid var(--line)',
             }}
@@ -199,14 +202,14 @@ export default function ThreadViewPage({ params }: { params: Promise<{ id: strin
               <Pin size={12} />
               <span>Pinned report to owner</span>
             </div>
-            <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--ink)', fontWeight: 500 }}>
+            <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--ink)', fontWeight: 500, wordBreak: 'break-word' }}>
               {pinnedReport}
             </p>
           </div>
         )}
 
         {/* Chronological Message Stream */}
-        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="screen-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {messages.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-soft)', fontSize: '14px' }}>
               No messages exchanged yet in this conversation.
@@ -247,7 +250,7 @@ export default function ThreadViewPage({ params }: { params: Promise<{ id: strin
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink)' }}>
                         {senderAgent?.name || 'Agent'}
                       </span>
@@ -278,7 +281,7 @@ export default function ThreadViewPage({ params }: { params: Promise<{ id: strin
                         lineHeight: 1.5,
                         color: 'var(--ink)',
                         border: '1px solid var(--line)',
-                        maxWidth: '85%',
+                        maxWidth: '92%',
                         wordBreak: 'break-word',
                       }}
                     >

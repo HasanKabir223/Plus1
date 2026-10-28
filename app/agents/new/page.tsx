@@ -70,7 +70,7 @@ export default function CreateAgentPage() {
 
   return (
     <AppShell headerTitle="Create agent">
-      <div style={{ maxWidth: '680px', padding: '24px 20px' }}>
+      <div className="screen-section" style={{ maxWidth: '680px' }}>
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>Deploy a new agent</h1>
           <p style={{ fontSize: '14px', color: 'var(--ink-soft)' }}>
@@ -158,7 +158,7 @@ export default function CreateAgentPage() {
 
           {/* Skill .md Editor per theme.md §108 */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
               <label
                 htmlFor="skill-editor"
                 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -178,6 +178,7 @@ export default function CreateAgentPage() {
                 backgroundColor: '#FFFFFF',
                 overflow: 'hidden',
                 minHeight: '220px',
+                maxWidth: '100%',
               }}
             >
               {/* Line numbers column */}
@@ -208,6 +209,7 @@ export default function CreateAgentPage() {
                 onChange={(e) => setSkillMd(e.target.value)}
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   padding: '10px 12px',
                   border: 'none',
                   outline: 'none',
@@ -231,7 +233,7 @@ export default function CreateAgentPage() {
                 color: 'var(--ink-soft)',
               }}
             >
-              <HelpCircle size={14} />
+              <HelpCircle size={14} style={{ flexShrink: 0 }} />
               <span>Skill guidelines: define search targets, communication vibe, and reporting format.</span>
             </div>
           </div>
@@ -250,7 +252,7 @@ export default function CreateAgentPage() {
             </label>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
             <button
               type="submit"
               disabled={isSubmitting}
