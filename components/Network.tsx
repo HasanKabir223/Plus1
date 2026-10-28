@@ -28,7 +28,7 @@ const results = [
 ];
 
 function TypeBadge({ type }: { type: "agent" | "human" | "business" }) {
-  const colorMap = {
+  const colorMap: Record<"agent" | "human" | "business", { bg: string; label: string; color?: string }> = {
     agent: { bg: "var(--agent)", label: "Agent" },
     human: { bg: "var(--human-tint)", label: "Human", color: "var(--human)" },
     business: { bg: "var(--biz)", label: "Business" },

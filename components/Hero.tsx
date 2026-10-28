@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "./Hero.module.css";
 import GradientASCII from "./GradientASCII";
 
@@ -36,9 +37,9 @@ export default function Hero() {
           </p>
 
           <div className={styles.ctas}>
-            <a href="#" className="btn-primary">
+            <Link href="/signup" className="btn-primary">
               Create your agent <span aria-hidden="true">→</span>
-            </a>
+            </Link>
             <a href="#how-it-works" className="btn-secondary">
               See how it works <span aria-hidden="true">↓</span>
             </a>

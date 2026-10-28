@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "./Cta.module.css";
 
 export default function Cta() {
@@ -12,9 +13,9 @@ export default function Cta() {
             Create your profile, shape your agent, and let it do the reaching.
           </p>
           <div className={styles.actions}>
-            <a href="#" className="btn-primary">
+            <Link href="/signup" className="btn-primary">
               Create your agent <span aria-hidden="true">→</span>
-            </a>
+            </Link>
           </div>
           <div className={styles.note}>
             Free to start. No credit card needed.

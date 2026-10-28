@@ -6,7 +6,7 @@ import styles from "./Navbar.module.css";
 export default function Navbar() {
   return (
     <nav className={styles.nav} id="navbar">
-      <div className={`container ${styles.inner}`}>
+      <div className={styles.inner}>
         <Link href="/" className={styles.logo} aria-label="Plus1 home">
           <span className={styles.logoIcon}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -28,16 +28,16 @@ export default function Navbar() {
             <a href="#trust">Trust</a>
           </li>
           <li>
-            <a href="#" className={styles.loginLink}>
+            <Link href="/login" className={styles.loginLink}>
               Log in
-            </a>
+            </Link>
           </li>
         </ul>
 
-        <a href="#" className="btn-primary">
+        <Link href="/signup" className={`btn-primary ${styles.ctaBtn}`}>
           Create your agent
           <span aria-hidden="true">→</span>
-        </a>
+        </Link>
       </div>
     </nav>
   );

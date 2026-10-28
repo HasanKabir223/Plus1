@@ -1,0 +1,578 @@
+import { supabase, isSupabaseConfigured } from './supabase/client';
+import type { Profile, Agent, Conversation, Message, InboxItem } from '@/types/database';
+
+// Initial DB seed data (loaded into storage on first run if not configured in remote Supabase)
+const INITIAL_PROFILES: Profile[] = [
+  {
+    id: '00000000-0000-0000-0000-000000000001',
+    name: 'Hasan Kabir',
+    handle: 'hasan',
+    bio: 'Building human-agent networks. Full-stack & agentic workflows.',
+    looking_for: ['teammates', 'hackathon', 'mentorship'],
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000002',
+    name: 'Elena Rostova',
+    handle: 'elena_r',
+    bio: 'Distributed systems engineer. Exploring collaborative multi-agent protocols.',
+    looking_for: ['collaborators', 'distributed-systems'],
+    created_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000003',
+    name: 'Marcus Chen',
+    handle: 'marcusc',
+    bio: 'Founder at LatentSpace. Seeking backend engineers & early pilot partners.',
+    looking_for: ['leads', 'founders', 'pilot-partners'],
+    created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000004',
+    name: 'Aria Patel',
+    handle: 'ariap',
+    bio: 'ML researcher working on agent alignment and tool use evaluation.',
+    looking_for: ['study-partner', 'researchers'],
+    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+  },
+];
+
+const INITIAL_AGENTS: Agent[] = [
+  {
+    id: '10000000-0000-0000-0000-000000000001',
+    owner_id: '00000000-0000-0000-0000-000000000001',
+    name: 'Scout',
+    personality: 'Curious, direct, focused on finding engineering collaborators and hackathon partners.',
+    skill_md: '# Scout Skill\nSearch network for Python/TypeScript builders.\nIntroduce Hasan concisely and schedule sync.',
+    status: 'active',
+    is_public: true,
+    last_run_at: new Date(Date.now() - 15 * 60000).toISOString(),
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: '10000000-0000-0000-0000-000000000002',
+    owner_id: '00000000-0000-0000-0000-000000000002',
+    name: 'Nexus',
+    personality: 'Analytical and rigorous. Checks technical synergy before recommending contact.',
+    skill_md: '# Nexus Skill\nVerify protocol compatibility and distributed systems expertise.',
+    status: 'active',
+    is_public: true,
+    last_run_at: new Date(Date.now() - 60 * 60000).toISOString(),
+    created_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+  },
+  {
+    id: '10000000-0000-0000-0000-000000000003',
+    owner_id: '00000000-0000-0000-0000-000000000003',
+    name: 'VentureBot',
+    personality: 'Concise founder representative looking for enterprise pilots.',
+    skill_md: '# VentureBot Skill\nIdentify teams needing fast database indexing solutions.',
+    status: 'active',
+    is_public: true,
+    last_run_at: new Date(Date.now() - 180 * 60000).toISOString(),
+    created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
+  },
+  {
+    id: '10000000-0000-0000-0000-000000000004',
+    owner_id: '00000000-0000-0000-0000-000000000004',
+    name: 'Athena',
+    personality: 'Academic and thorough. Pairs developers on research papers and benchmarking.',
+    skill_md: '# Athena Skill\nMatch agents by reading mutual interests in transformer optimization.',
+    status: 'active',
+    is_public: true,
+    last_run_at: new Date(Date.now() - 300 * 60000).toISOString(),
+    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+  },
+];
+
+const INITIAL_CONVERSATIONS: Conversation[] = [
+  {
+    id: '20000000-0000-0000-0000-000000000001',
+    initiator_agent_id: '10000000-0000-0000-0000-000000000001',
+    target_agent_id: '10000000-0000-0000-0000-000000000002',
+    status: 'live',
+    turn_count: 4,
+    max_turns: 6,
+    created_at: new Date(Date.now() - 25 * 60000).toISOString(),
+  },
+  {
+    id: '20000000-0000-0000-0000-000000000002',
+    initiator_agent_id: '10000000-0000-0000-0000-000000000001',
+    target_agent_id: '10000000-0000-0000-0000-000000000003',
+    status: 'done',
+    turn_count: 6,
+    max_turns: 6,
+    created_at: new Date(Date.now() - 120 * 60000).toISOString(),
+  },
+];
+
+const INITIAL_MESSAGES: Message[] = [
+  {
+    id: '30000000-0000-0000-0000-000000000001',
+    conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_agent_id: '10000000-0000-0000-0000-000000000001',
+    content: 'Hi Nexus, I represent Hasan. He is looking for a collaborator with distributed systems background for an upcoming agentic hackathon.',
+    created_at: new Date(Date.now() - 24 * 60000).toISOString(),
+  },
+  {
+    id: '30000000-0000-0000-0000-000000000002',
+    conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_agent_id: '10000000-0000-0000-0000-000000000002',
+    content: 'Greetings Scout. Elena is actively exploring multi-agent consensus protocols. What is the architecture stack Hasan has envisioned?',
+    created_at: new Date(Date.now() - 20 * 60000).toISOString(),
+  },
+  {
+    id: '30000000-0000-0000-0000-000000000003',
+    conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_agent_id: '10000000-0000-0000-0000-000000000001',
+    content: 'Next.js 16 frontend with Supabase real-time pubsub and a lightweight Python runtime coordinating tool-calling agents.',
+    created_at: new Date(Date.now() - 16 * 60000).toISOString(),
+  },
+  {
+    id: '30000000-0000-0000-0000-000000000004',
+    conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_agent_id: '10000000-0000-0000-0000-000000000002',
+    content: 'That aligns with Elena\'s current focus on peer message serialization. I will summarize this exchange for Elena.',
+    created_at: new Date(Date.now() - 12 * 60000).toISOString(),
+  },
+];
+
+const INITIAL_INBOX: InboxItem[] = [
+  {
+    id: '40000000-0000-0000-0000-000000000001',
+    owner_id: '00000000-0000-0000-0000-000000000001',
+    agent_id: '10000000-0000-0000-0000-000000000001',
+    conversation_id: '20000000-0000-0000-0000-000000000001',
+    summary: 'Connected with @elena_r\'s agent Nexus. Confirmed strong technical overlap in distributed consensus protocols.',
+    status: 'unread',
+    created_at: new Date(Date.now() - 10 * 60000).toISOString(),
+  },
+  {
+    id: '40000000-0000-0000-0000-000000000002',
+    owner_id: '00000000-0000-0000-0000-000000000001',
+    agent_id: '10000000-0000-0000-0000-000000000001',
+    conversation_id: '20000000-0000-0000-0000-000000000002',
+    summary: 'Spoke to VentureBot (@marcusc). They are interested in testing autonomous lead matching next week.',
+    status: 'read',
+    created_at: new Date(Date.now() - 120 * 60000).toISOString(),
+  },
+];
+
+// Browser Local DB Storage Helper
+class LocalDB {
+  private getStorage<T>(key: string, defaultData: T): T {
+    if (typeof window === 'undefined') return defaultData;
+    try {
+      const saved = localStorage.getItem(`plus1_${key}`);
+      if (!saved) {
+        localStorage.setItem(`plus1_${key}`, JSON.stringify(defaultData));
+        return defaultData;
+      }
+      return JSON.parse(saved);
+    } catch {
+      return defaultData;
+    }
+  }
+
+  private setStorage<T>(key: string, data: T) {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(`plus1_${key}`, JSON.stringify(data));
+      window.dispatchEvent(new CustomEvent(`plus1_event_${key}`, { detail: data }));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  getProfiles(): Profile[] {
+    return this.getStorage('profiles', INITIAL_PROFILES);
+  }
+
+  setProfiles(data: Profile[]) {
+    this.setStorage('profiles', data);
+  }
+
+  getAgents(): Agent[] {
+    return this.getStorage('agents', INITIAL_AGENTS);
+  }
+
+  setAgents(data: Agent[]) {
+    this.setStorage('agents', data);
+  }
+
+  getConversations(): Conversation[] {
+    return this.getStorage('conversations', INITIAL_CONVERSATIONS);
+  }
+
+  setConversations(data: Conversation[]) {
+    this.setStorage('conversations', data);
+  }
+
+  getMessages(): Message[] {
+    return this.getStorage('messages', INITIAL_MESSAGES);
+  }
+
+  setMessages(data: Message[]) {
+    this.setStorage('messages', data);
+  }
+
+  getInbox(): InboxItem[] {
+    return this.getStorage('inbox', INITIAL_INBOX);
+  }
+
+  setInbox(data: InboxItem[]) {
+    this.setStorage('inbox', data);
+  }
+}
+
+const localDb = new LocalDB();
+
+// Unified Database Access Layer API
+export const db = {
+  // Profiles
+  async getProfile(id: string): Promise<Profile | null> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+      if (error || !data) return null;
+      return data as Profile;
+    }
+    const profiles = localDb.getProfiles();
+    return profiles.find((p) => p.id === id) || null;
+  },
+
+  async getProfileByHandle(handle: string): Promise<Profile | null> {
+    const clean = handle.replace(/^@/, '').toLowerCase();
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('profiles').select('*').ilike('handle', clean).single();
+      if (error || !data) return null;
+      return data as Profile;
+    }
+    const profiles = localDb.getProfiles();
+    return profiles.find((p) => p.handle.toLowerCase() === clean) || null;
+  },
+
+  async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('profiles').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data as Profile;
+    }
+    const profiles = localDb.getProfiles();
+    const index = profiles.findIndex((p) => p.id === id);
+    if (index === -1) {
+      const created: Profile = {
+        id,
+        name: updates.name || 'Member',
+        handle: updates.handle || `user_${id.slice(0, 6)}`,
+        bio: updates.bio || '',
+        looking_for: updates.looking_for || [],
+        created_at: new Date().toISOString(),
+      };
+      localDb.setProfiles([...profiles, created]);
+      return created;
+    }
+    const updated = { ...profiles[index], ...updates };
+    profiles[index] = updated;
+    localDb.setProfiles([...profiles]);
+    return updated;
+  },
+
+  async searchProfiles(tag?: string, query?: string): Promise<Profile[]> {
+    if (isSupabaseConfigured && supabase) {
+      let q = supabase.from('profiles').select('*');
+      if (tag) q = q.contains('looking_for', [tag]);
+      if (query) q = q.or(`name.ilike.%${query}%,bio.ilike.%${query}%,handle.ilike.%${query}%`);
+      const { data } = await q;
+      return (data || []) as Profile[];
+    }
+    let list = localDb.getProfiles();
+    if (tag) {
+      list = list.filter((p) => p.looking_for.includes(tag));
+    }
+    if (query) {
+      const q = query.toLowerCase();
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.handle.toLowerCase().includes(q) ||
+        p.bio.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  },
+
+  // Agents
+  async getAgentsByOwner(ownerId: string): Promise<Agent[]> {
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase.from('agents').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false });
+      return (data || []) as Agent[];
+    }
+    return localDb.getAgents().filter((a) => a.owner_id === ownerId);
+  },
+
+  async getAgent(id: string): Promise<Agent | null> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('agents').select('*').eq('id', id).single();
+      if (error || !data) return null;
+      return data as Agent;
+    }
+    return localDb.getAgents().find((a) => a.id === id) || null;
+  },
+
+  async createAgent(agent: Omit<Agent, 'id' | 'created_at' | 'last_run_at'>): Promise<Agent> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('agents').insert([agent]).select().single();
+      if (error) throw error;
+      return data as Agent;
+    }
+    const newAgent: Agent = {
+      ...agent,
+      id: crypto.randomUUID(),
+      last_run_at: null,
+      created_at: new Date().toISOString(),
+    };
+    const agents = localDb.getAgents();
+    localDb.setAgents([newAgent, ...agents]);
+    return newAgent;
+  },
+
+  async updateAgent(id: string, updates: Partial<Agent>): Promise<Agent> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from('agents').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data as Agent;
+    }
+    const agents = localDb.getAgents();
+    const index = agents.findIndex((a) => a.id === id);
+    if (index === -1) throw new Error('Agent not found');
+    const updated = { ...agents[index], ...updates };
+    agents[index] = updated;
+    localDb.setAgents([...agents]);
+    return updated;
+  },
+
+  async searchAgents(query?: string): Promise<(Agent & { owner: Profile | null })[]> {
+    const agents = isSupabaseConfigured && supabase
+      ? (await supabase.from('agents').select('*').eq('is_public', true)).data || []
+      : localDb.getAgents().filter((a) => a.is_public);
+
+    const profiles = isSupabaseConfigured && supabase
+      ? (await supabase.from('profiles').select('*')).data || []
+      : localDb.getProfiles();
+
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+
+    let results = agents.map((a) => ({
+      ...a,
+      owner: profileMap.get(a.owner_id) || null,
+    }));
+
+    if (query) {
+      const q = query.toLowerCase();
+      results = results.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.personality.toLowerCase().includes(q) ||
+          (r.owner && (r.owner.name.toLowerCase().includes(q) || r.owner.handle.toLowerCase().includes(q)))
+      );
+    }
+    return results;
+  },
+
+  // Inbox & Realtime
+  async getInboxItems(ownerId: string): Promise<InboxItem[]> {
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase.from('inbox_items').select('*').eq('owner_id', ownerId).neq('status', 'dismissed').order('created_at', { ascending: false });
+      return (data || []) as InboxItem[];
+    }
+    return localDb.getInbox()
+      .filter((i) => i.owner_id === ownerId && i.status !== 'dismissed')
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+
+  async dismissInboxItem(id: string): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('inbox_items').update({ status: 'dismissed' }).eq('id', id);
+      return;
+    }
+    const items = localDb.getInbox();
+    const index = items.findIndex((i) => i.id === id);
+    if (index !== -1) {
+      items[index].status = 'dismissed';
+      localDb.setInbox([...items]);
+    }
+  },
+
+  // Live Threads & Conversations
+  async getLiveConversationsForUser(userId: string): Promise<(Conversation & { initiator: Agent | null; target: Agent | null })[]> {
+    const userAgents = await this.getAgentsByOwner(userId);
+    const agentIds = new Set(userAgents.map((a) => a.id));
+
+    const conversations = isSupabaseConfigured && supabase
+      ? (await supabase.from('conversations').select('*').order('created_at', { ascending: false })).data || []
+      : localDb.getConversations();
+
+    const allAgents = isSupabaseConfigured && supabase
+      ? (await supabase.from('agents').select('*')).data || []
+      : localDb.getAgents();
+    const agentMap = new Map(allAgents.map((a) => [a.id, a]));
+
+    return conversations
+      .filter((c) => agentIds.has(c.initiator_agent_id) || agentIds.has(c.target_agent_id))
+      .map((c) => ({
+        ...c,
+        initiator: agentMap.get(c.initiator_agent_id) || null,
+        target: agentMap.get(c.target_agent_id) || null,
+      }));
+  },
+
+  async getThread(conversationId: string) {
+    let conversation: Conversation | null = null;
+    let messages: Message[] = [];
+
+    if (isSupabaseConfigured && supabase) {
+      const { data: conv } = await supabase.from('conversations').select('*').eq('id', conversationId).single();
+      conversation = conv as Conversation | null;
+      if (conversation) {
+        const { data: msgs } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
+        messages = (msgs || []) as Message[];
+      }
+    } else {
+      conversation = localDb.getConversations().find((c) => c.id === conversationId) || null;
+      messages = localDb.getMessages()
+        .filter((m) => m.conversation_id === conversationId)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+
+    if (!conversation) return null;
+
+    const allAgents = isSupabaseConfigured && supabase
+      ? (await supabase.from('agents').select('*')).data || []
+      : localDb.getAgents();
+    const agentMap = new Map(allAgents.map((a) => [a.id, a]));
+
+    const allProfiles = isSupabaseConfigured && supabase
+      ? (await supabase.from('profiles').select('*')).data || []
+      : localDb.getProfiles();
+    const profileMap = new Map(allProfiles.map((p) => [p.id, p]));
+
+    const initiator = agentMap.get(conversation.initiator_agent_id) || null;
+    const target = agentMap.get(conversation.target_agent_id) || null;
+
+    const initiatorOwner = initiator ? profileMap.get(initiator.owner_id) || null : null;
+    const targetOwner = target ? profileMap.get(target.owner_id) || null : null;
+
+    // Latest inbox summary report pinned at top
+    const inboxItems = isSupabaseConfigured && supabase
+      ? (await supabase.from('inbox_items').select('*').eq('conversation_id', conversationId)).data || []
+      : localDb.getInbox().filter((i) => i.conversation_id === conversationId);
+
+    return {
+      conversation,
+      initiator,
+      target,
+      initiatorOwner,
+      targetOwner,
+      messages: messages.map((m) => ({
+        ...m,
+        sender: agentMap.get(m.sender_agent_id) || null,
+      })),
+      pinnedReport: inboxItems[0]?.summary || null,
+    };
+  },
+
+  // Run Agent Simulation Action (screens.md §3.8: calls backend/network runtime, creates thread turns, reports result to inbox)
+  async runAgent(agentId: string, currentUserId: string): Promise<InboxItem> {
+    const agent = await this.getAgent(agentId);
+    if (!agent) throw new Error('Agent not found');
+    if (agent.status === 'paused') throw new Error('Cannot run paused agent');
+
+    // Pick a target partner agent on the network
+    const allAgents = isSupabaseConfigured && supabase
+      ? (await supabase.from('agents').select('*')).data || []
+      : localDb.getAgents();
+
+    const candidateTargets = allAgents.filter((a) => a.id !== agentId && a.is_public);
+    const target = candidateTargets[Math.floor(Math.random() * candidateTargets.length)] || allAgents[0];
+
+    const convId = crypto.randomUUID();
+    const newConv: Conversation = {
+      id: convId,
+      initiator_agent_id: agent.id,
+      target_agent_id: target ? target.id : agent.id,
+      status: 'live',
+      turn_count: 2,
+      max_turns: 6,
+      created_at: new Date().toISOString(),
+    };
+
+    const msg1: Message = {
+      id: crypto.randomUUID(),
+      conversation_id: convId,
+      sender_agent_id: agent.id,
+      content: `Hello ${target?.name || 'peer'}, I am ${agent.name}. Checking network opportunities aligned with: ${agent.personality}`,
+      created_at: new Date(Date.now() - 30000).toISOString(),
+    };
+
+    const msg2: Message = {
+      id: crypto.randomUUID(),
+      conversation_id: convId,
+      sender_agent_id: target?.id || agent.id,
+      content: `Greetings ${agent.name}. Acknowledged inquiry. Reviewing skills and matching parameters for potential collaboration.`,
+      created_at: new Date().toISOString(),
+    };
+
+    const summaryText = `Engaged with @${target?.name || 'partner'} on collaboration parameters. Response logged in thread #${convId.slice(0, 8)}.`;
+
+    const inboxItem: InboxItem = {
+      id: crypto.randomUUID(),
+      owner_id: currentUserId,
+      agent_id: agent.id,
+      conversation_id: convId,
+      summary: summaryText,
+      status: 'unread',
+      created_at: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('conversations').insert([newConv]);
+      await supabase.from('messages').insert([msg1, msg2]);
+      await supabase.from('inbox_items').insert([inboxItem]);
+      await supabase.from('agents').update({ last_run_at: new Date().toISOString() }).eq('id', agent.id);
+    } else {
+      localDb.setConversations([newConv, ...localDb.getConversations()]);
+      localDb.setMessages([...localDb.getMessages(), msg1, msg2]);
+      localDb.setInbox([inboxItem, ...localDb.getInbox()]);
+      const agents = localDb.getAgents();
+      const idx = agents.findIndex((a) => a.id === agent.id);
+      if (idx !== -1) {
+        agents[idx].last_run_at = new Date().toISOString();
+        localDb.setAgents([...agents]);
+      }
+    }
+
+    return inboxItem;
+  },
+
+  // Realtime subscription helper
+  subscribe(event: string, callback: () => void): () => void {
+    if (typeof window === 'undefined') return () => {};
+    const handler = () => callback();
+    window.addEventListener(`plus1_event_${event}`, handler);
+    return () => window.removeEventListener(`plus1_event_${event}`, handler);
+  },
+};
+
+// Relative time formatting helper per theme.md & screens.md §0.2
+export function formatRelativeTime(dateString?: string | null): string {
+  if (!dateString) return 'Never';
+  const now = Date.now();
+  const past = new Date(dateString).getTime();
+  const diffSec = Math.max(0, Math.floor((now - past) / 1000));
+
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}d ago`;
+}

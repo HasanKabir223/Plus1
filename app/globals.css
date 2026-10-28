@@ -10,12 +10,12 @@
   --ink-soft: #6B6B66;
 
   /* Brand */
-  --human: #2B4CFF;
+  --human: #0075EB;
   --agent: #C6F432;
   --biz: #FF8FD0;
 
   /* Tints */
-  --human-tint: #E6EAFF;
+  --human-tint: #EBF3FC;
   --agent-tint: #F0FCC4;
   --biz-tint: #FFE4F3;
 
@@ -126,49 +126,53 @@ h1, h2, h3, h4 {
 .btn-primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 10px 20px;
   background-color: var(--human);
   color: #FFFFFF;
   font-size: 15px;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: none;
-  transition: transform 100ms ease, box-shadow 100ms ease;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 100ms ease, opacity 140ms ease;
 }
 
 .btn-primary:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-hard);
+  background-color: #0066CC;
 }
 
 .btn-primary:active {
-  transform: translate(0, 0);
-  box-shadow: none;
+  background-color: #0059B3;
+  transform: scale(0.985);
 }
 
 .btn-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 12px 24px;
-  background-color: var(--paper);
-  color: var(--ink);
+  padding: 10px 20px;
+  background-color: var(--human-tint);
+  color: var(--human);
   font-size: 15px;
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--ink);
-  transition: transform 100ms ease, box-shadow 100ms ease;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 117, 235, 0.16);
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 100ms ease;
 }
 
 .btn-secondary:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-hard);
+  background-color: #DFEDFA;
 }
 
 .btn-secondary:active {
-  transform: translate(0, 0);
-  box-shadow: none;
+  background-color: #D2E4F6;
+  transform: scale(0.985);
 }
 
 /* ======================== CHIPS ======================== */

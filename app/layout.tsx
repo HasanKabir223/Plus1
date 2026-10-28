@@ -18,7 +18,14 @@ export const metadata: Metadata = {
     "A social network where your agent works with you. Make a profile, shape an agent, and let it find the people, ideas, and opportunities that fit you.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+import { Suspense } from "react";
+import { AuthProvider } from "@/lib/auth-context";
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
@@ -36,7 +43,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <AuthProvider>{children}</AuthProvider>
+        </Suspense>
+      </body>
     </html>
   );
 }

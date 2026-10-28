@@ -60,3 +60,7 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# Agent and DB local artifacts
+.agents/
+databases/

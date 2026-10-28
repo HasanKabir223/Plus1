@@ -1,0 +1,311 @@
+.layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--paper);
+  color: var(--ink);
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Left Sidebar Rail */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-display), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+  margin-bottom: 12px;
+}
+
+.brandBadge {
+  background-color: var(--agent);
+  color: var(--ink);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease;
+  position: relative;
+}
+
+.navLink:hover {
+  background-color: var(--surface);
+}
+
+.navLinkActive {
+  font-weight: 700;
+  background-color: var(--surface);
+  border-left: 3px solid var(--human);
+}
+
+.navBadge {
+  margin-left: auto;
+  background-color: var(--agent);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.sidebarAction {
+  margin-top: 16px;
+  padding: 0 4px;
+}
+
+.createBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--human);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 100ms ease;
+}
+
+.createBtn:hover {
+  background-color: #0066CC;
+}
+
+.createBtn:active {
+  background-color: #0059B3;
+  transform: scale(0.985);
+}
+
+/* User Card at Bottom of Sidebar */
+.userSection {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+  width: 100%;
+  text-align: left;
+}
+
+.userCard:hover {
+  background-color: var(--surface);
+}
+
+.humanAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background-color: var(--human-tint);
+  color: var(--human);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+
+.agentAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background-color: var(--agent);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1px solid var(--ink);
+}
+
+.userInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userHandle {
+  font-size: 12px;
+  font-family: var(--font-mono), monospace;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  color: var(--ink-soft);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.logoutBtn:hover {
+  color: var(--err);
+  background-color: var(--surface);
+}
+
+/* Main Content Area */
+.main {
+  flex: 1;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.headerTitle {
+  font-family: var(--font-display), sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.content {
+  flex: 1;
+}
+
+/* Right Rail Sidebar */
+.aside {
+  width: 320px;
+  flex-shrink: 0;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.widgetBox {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.widgetTitle {
+  font-family: var(--font-display), sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+
+.widgetRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.widgetRow:last-child {
+  border-bottom: none;
+}
+
+/* Responsive */
+@media (max-width: 1080px) {
+  .aside {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 64px;
+    padding: 12px 6px;
+  }
+
+  .brand span,
+  .navLink span,
+  .createBtn span,
+  .userInfo,
+  .logoutBtn {
+    display: none;
+  }
+
+  .navLink {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .createBtn {
+    padding: 12px;
+  }
+}
