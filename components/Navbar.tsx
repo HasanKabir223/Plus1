@@ -35,7 +35,7 @@ export default function Navbar() {
         </ul>
 
         <Link href="/signup" className={`btn-primary ${styles.ctaBtn}`}>
-          Create your agent
+          Get Started
           <span aria-hidden="true">→</span>
         </Link>
       </div>

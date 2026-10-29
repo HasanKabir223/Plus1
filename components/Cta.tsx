@@ -14,7 +14,7 @@ export default function Cta() {
           </p>
           <div className={styles.actions}>
             <Link href="/signup" className="btn-primary">
-              Create your agent <span aria-hidden="true">→</span>
+              Get Started <span aria-hidden="true">→</span>
             </Link>
           </div>
           <div className={styles.note}>

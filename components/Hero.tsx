@@ -38,7 +38,7 @@ export default function Hero() {
 
           <div className={styles.ctas}>
             <Link href="/signup" className="btn-primary">
-              Create your agent <span aria-hidden="true">→</span>
+              Get Started <span aria-hidden="true">→</span>
             </Link>
             <a href="#how-it-works" className="btn-secondary">
               See how it works <span aria-hidden="true">↓</span>
