@@ -16,61 +16,66 @@ const SUGGESTED_TAGS = [
   'pilot-partners',
 ];
 
+const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, profile, updateProfile } = useAuth();
-  const [username, setUsername] = useState(profile?.username || profile?.name || '');
-  const [handle, setHandle] = useState(profile?.handle || '');
+
+  const [displayName, setDisplayName] = useState(profile?.profilename || profile?.name || '');
+  const [username, setUsername] = useState(profile?.username || profile?.handle || '');
   const [bio, setBio] = useState(profile?.bio || '');
   const [selectedTags, setSelectedTags] = useState<string[]>(profile?.looking_for || []);
-  const [handleError, setHandleError] = useState<string | null>(null);
-  const [isCheckingHandle, setIsCheckingHandle] = useState(false);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (profile) {
-      if (!username) setUsername(profile.username || profile.name || '');
-      if (!handle) setHandle(profile.handle);
-      if (!bio) setBio(profile.bio);
+      if (!displayName) setDisplayName(profile.profilename || profile.name || '');
+      if (!username) setUsername(profile.username || profile.handle || '');
+      if (!bio) setBio(profile.bio || '');
       if (selectedTags.length === 0 && profile.looking_for) setSelectedTags(profile.looking_for);
     }
   }, [profile]);
 
-  // Live handle availability check
+  // Live username format & availability check
   useEffect(() => {
-    if (!handle) {
-      setHandleError('Handle is required.');
-      return;
-    }
-    const cleanHandle = handle.toLowerCase().replace(/[^a-z0-9_]/g, '');
-    if (cleanHandle !== handle) {
-      setHandleError('Only lowercase letters, numbers, and underscores allowed.');
+    const clean = username.trim().toLowerCase();
+    if (!clean) {
+      setUsernameError('Username is required.');
       return;
     }
 
-    if (cleanHandle === profile?.handle) {
-      setHandleError(null);
+    if (!USERNAME_REGEX.test(clean)) {
+      setUsernameError('Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores.');
       return;
     }
 
-    setIsCheckingHandle(true);
+    if (clean === profile?.username) {
+      setUsernameError(null);
+      return;
+    }
+
+    setIsCheckingUsername(true);
     const timer = setTimeout(async () => {
       try {
-        const existing = await db.getProfileByHandle(cleanHandle);
+        const existing = await db.getProfileByHandle(clean);
         if (existing && existing.id !== user?.id) {
-          setHandleError('Handle is already taken.');
+          setUsernameError('This username is already taken. Please choose another.');
         } else {
-          setHandleError(null);
+          setUsernameError(null);
         }
       } catch {
-        // ignore
+        // network or ignore
       } finally {
-        setIsCheckingHandle(false);
+        setIsCheckingUsername(false);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [handle, profile, user]);
+  }, [username, profile, user]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -80,21 +85,57 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (handleError || !username.trim() || !handle.trim()) return;
+    setGeneralError(null);
+
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanName = displayName.trim() || cleanUsername;
+
+    if (!cleanUsername) {
+      setUsernameError('Username is required.');
+      return;
+    }
+
+    if (!USERNAME_REGEX.test(cleanUsername)) {
+      setUsernameError('Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores.');
+      return;
+    }
+
+    if (usernameError) return;
+
+    if (!user) {
+      router.push('/login');
+      return;
+    }
 
     try {
       setIsSaving(true);
       await updateProfile({
-        username: username.trim(),
-        name: username.trim(),
-        handle: handle.trim().toLowerCase(),
+        username: cleanUsername,
+        handle: cleanUsername,
+        profilename: cleanName,
+        name: cleanName,
         bio: bio.trim(),
         looking_for: selectedTags,
       });
+
       router.push('/home');
+      router.refresh();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save profile.';
-      setHandleError(msg);
+      const errObj = err as { code?: string; message?: string };
+      const code = errObj?.code;
+      const message = errObj?.message || (err instanceof Error ? err.message : String(err));
+
+      // Handle Postgres unique violation error (code 23505) or duplicate key message
+      if (
+        code === '23505' ||
+        message.toLowerCase().includes('unique') ||
+        message.toLowerCase().includes('duplicate key') ||
+        message.toLowerCase().includes('already taken')
+      ) {
+        setUsernameError('This username is already taken. Please choose another.');
+      } else {
+        setGeneralError(message || 'Failed to save profile.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -123,9 +164,25 @@ export default function OnboardingPage() {
             Set up your profile
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--ink-soft)' }}>
-            Other members and their agents will use this information to discover and connect with you.
+            Complete your profile to deploy autonomous agents and explore the network.
           </p>
         </div>
+
+        {generalError && (
+          <div
+            style={{
+              padding: '12px 14px',
+              backgroundColor: '#FFF0F0',
+              border: '1px solid var(--err)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--err)',
+              fontSize: '14px',
+              marginBottom: '18px',
+            }}
+          >
+            {generalError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
@@ -133,34 +190,7 @@ export default function OnboardingPage() {
               htmlFor="username"
               style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
             >
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. hasankabir"
-              required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--line)',
-                backgroundColor: 'var(--surface)',
-                fontSize: '15px',
-                color: 'var(--ink)',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="handle"
-              style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
-            >
-              Handle
+              Username (required, unique)
             </label>
             <div style={{ position: 'relative' }}>
               <span
@@ -176,17 +206,18 @@ export default function OnboardingPage() {
                 @
               </span>
               <input
-                id="handle"
+                id="username"
                 type="text"
-                value={handle}
-                onChange={(e) => setHandle(e.target.value.toLowerCase())}
-                placeholder="hasan"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                placeholder="hasankabir"
                 required
+                autoComplete="off"
                 style={{
                   width: '100%',
                   padding: '10px 12px 10px 28px',
                   borderRadius: 'var(--radius-sm)',
-                  border: handleError ? '1.5px solid var(--err)' : '1px solid var(--line)',
+                  border: usernameError ? '1.5px solid var(--err)' : '1px solid var(--line)',
                   backgroundColor: 'var(--surface)',
                   fontFamily: 'var(--font-mono)',
                   fontSize: '14px',
@@ -195,19 +226,46 @@ export default function OnboardingPage() {
                 }}
               />
             </div>
-            {isCheckingHandle ? (
+            {isCheckingUsername ? (
               <span style={{ fontSize: '12px', color: 'var(--ink-soft)', marginTop: '4px', display: 'block' }}>
-                Checking handle availability...
+                Checking username availability...
               </span>
-            ) : handleError ? (
+            ) : usernameError ? (
               <span style={{ fontSize: '12px', color: 'var(--err)', marginTop: '4px', display: 'block' }}>
-                {handleError}
+                {usernameError}
               </span>
-            ) : (
+            ) : username.trim() ? (
               <span style={{ fontSize: '12px', color: 'var(--ok)', marginTop: '4px', display: 'block' }}>
-                ✓ Handle is available
+                ✓ Username is available
               </span>
-            )}
+            ) : null}
+          </div>
+
+          <div>
+            <label
+              htmlFor="displayName"
+              style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
+            >
+              Display Name
+            </label>
+            <input
+              id="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="e.g. Hasan Kabir"
+              required
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--line)',
+                backgroundColor: 'var(--surface)',
+                fontSize: '15px',
+                color: 'var(--ink)',
+                outline: 'none',
+              }}
+            />
           </div>
 
           <div>
@@ -272,7 +330,7 @@ export default function OnboardingPage() {
 
           <button
             type="submit"
-            disabled={isSaving || Boolean(handleError)}
+            disabled={isSaving || Boolean(usernameError)}
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center', marginTop: '12px' }}
           >

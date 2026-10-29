@@ -2,6 +2,7 @@ export type Profile = {
   id: string;
   user_id?: string;
   username: string;
+  profilename?: string;
   name: string;
   handle: string;
   bio: string;

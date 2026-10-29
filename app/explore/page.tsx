@@ -275,13 +275,13 @@ export default function ExplorePage() {
                           flexShrink: 0,
                         }}
                       >
-                        {p.name.charAt(0).toUpperCase()}
+                        {(p.profilename || p.name || p.username || '').charAt(0).toUpperCase()}
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
                           <Link
-                            href={`/u/${p.handle}`}
+                            href={`/u/${p.handle || p.username}`}
                             style={{
                               fontSize: '15px',
                               fontWeight: 700,
@@ -290,7 +290,7 @@ export default function ExplorePage() {
                               wordBreak: 'break-word',
                             }}
                           >
-                            {p.name}
+                            {p.profilename || p.name || p.username}
                           </Link>
                           <span
                             style={{
@@ -299,7 +299,7 @@ export default function ExplorePage() {
                               color: 'var(--ink-soft)',
                             }}
                           >
-                            @{p.handle}
+                            @{p.handle || p.username}
                           </span>
                         </div>
 

@@ -2,16 +2,18 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
 import type { Profile, Agent } from '@/types/database';
-import { Plus, Edit2, Check, X, Clock, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Check, X, Clock, AlertCircle, Trash2 } from 'lucide-react';
 
 export default function ProfilePage({ params }: { params: Promise<{ handle: string }> }) {
+  const router = useRouter();
   const resolvedParams = use(params);
   const handleParam = decodeURIComponent(resolvedParams.handle);
-  const { user, profile: authProfile, updateProfile } = useAuth();
+  const { user, profile: authProfile, updateProfile, signOut } = useAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -25,6 +27,11 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [editTags, setEditTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Account deletion state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const isOwner = Boolean(user && profile && user.id === profile.id);
 
@@ -66,7 +73,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     try {
       setIsSaving(true);
       await updateProfile({
-        username: editName,
+        profilename: editName,
         name: editName,
         bio: editBio,
         looking_for: editTags,
@@ -75,7 +82,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         prev
           ? {
               ...prev,
-              username: editName,
+              profilename: editName,
               name: editName,
               bio: editBio,
               looking_for: editTags,
@@ -99,6 +106,27 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
 
   const removeTag = (tag: string) => {
     setEditTags(editTags.filter((t) => t !== tag));
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    try {
+      setIsDeletingAccount(true);
+      setDeleteError(null);
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete account');
+      }
+      await signOut();
+      router.push('/');
+      router.refresh();
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete account');
+      setIsDeletingAccount(false);
+    }
   };
 
   if (isLoading) {
@@ -447,6 +475,101 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
             </div>
           )}
         </div>
+
+        {/* Danger Zone: Account Deletion (Owner only) */}
+        {isOwner && (
+          <div className="screen-section" style={{ borderTop: '1px solid var(--line)', marginTop: '24px', paddingTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--err)', marginBottom: '4px' }}>
+                  Danger Zone
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
+                  Permanently delete your account from the database. This cascades and removes your profile and all deployed agents.
+                </p>
+              </div>
+
+              {!showDeleteConfirm && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--err)',
+                    backgroundColor: '#FFF5F5',
+                    color: 'var(--err)',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Trash2 size={14} /> Delete account
+                </button>
+              )}
+            </div>
+
+            {showDeleteConfirm && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '16px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1.5px solid var(--err)',
+                  backgroundColor: '#FFF5F5',
+                }}
+              >
+                <div style={{ fontWeight: 700, color: 'var(--err)', fontSize: '14px', marginBottom: '6px' }}>
+                  Confirm Permanent Account Deletion
+                </div>
+                <p style={{ fontSize: '13px', color: 'var(--ink)', marginBottom: '14px', lineHeight: 1.5 }}>
+                  This will permanently delete your user record in <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', backgroundColor: '#FFEBEB', padding: '2px 4px', borderRadius: '4px' }}>auth.users</code> based on your primary key ID (<code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{user?.id}</code>). Because <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>public.profiles</code> references <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>auth.users(id) ON DELETE CASCADE</code>, your public profile and all dependent records will be completely removed.
+                </p>
+
+                {deleteError && (
+                  <div style={{ fontSize: '13px', color: 'var(--err)', marginBottom: '12px', fontWeight: 600 }}>
+                    Error: {deleteError}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={isDeletingAccount}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--err)',
+                      color: '#FFFFFF',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: isDeletingAccount ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isDeletingAccount ? 'Deleting account...' : 'Yes, permanently delete my account'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteError(null);
+                    }}
+                    disabled={isDeletingAccount}
+                    className="btn-secondary"
+                    style={{ padding: '8px 14px', fontSize: '13px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </AppShell>
   );

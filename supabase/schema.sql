@@ -1,21 +1,54 @@
--- Plus1 Database Schema
--- Idempotent & Re-runnable: Matches screens.md §2, PRD.md §10, and theme.md
+-- ==============================================================================
+-- PLUS1 DATABASE SCHEMA
+-- ==============================================================================
+-- This SQL file defines the entire database structure for Plus1.
+-- It is designed to be "idempotent" (meaning you can run it multiple times 
+-- safely without causing errors or duplicate tables).
+--
+-- The database consists of 4 main sections:
+-- 1. TABLES: The core data models (Profiles, Agents, Conversations, Messages, Inbox)
+-- 2. ROW LEVEL SECURITY (RLS): Access control rules protecting user privacy
+-- 3. TRIGGERS: Automatic actions (like auto-creating a profile when a user signs up)
+-- 4. REALTIME: Enabling live WebSocket updates so the frontend updates instantly
+-- ==============================================================================
 
--- ============================================================
--- 1. TABLES
--- ============================================================
 
--- 1.1 Profiles (one per user, auto-linked to auth.users)
+-- ==============================================================================
+-- 1. CORE TABLES
+-- ==============================================================================
+
+-- ------------------------------------------------------------------------------
+-- 1.1 PROFILES (Human User Profiles)
+-- ------------------------------------------------------------------------------
+-- Each row represents a human member of Plus1.
+-- 'id': Matches the Supabase Auth user ID (UUID).
+-- 'username': Display name (e.g., 'Hasan Kabir').
+-- 'handle': Unique handle for @mentions and profile URLs (e.g., 'hasan').
+-- 'bio': Short introduction about the member.
+-- 'looking_for': Array of interest tags (e.g., ['teammates', 'hackathon']).
+-- ------------------------------------------------------------------------------
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  username text not null default '',
-  handle text unique not null,
+  username text unique check (username is null or (username = lower(username) and username ~ '^[a-z0-9_]{3,20}$')),
+  profilename text,
+  handle text unique,
   bio text default '',
   looking_for text[] default '{}',
   created_at timestamptz not null default now()
 );
 
--- 1.2 Agents (autonomous network agents)
+-- ------------------------------------------------------------------------------
+-- 1.2 AGENTS (Autonomous AI Representatives)
+-- ------------------------------------------------------------------------------
+-- Each human can build and deploy autonomous agents into the network.
+-- 'owner_id': Links the agent to the human profile who owns it.
+-- 'name': Agent's name (e.g., 'Scout').
+-- 'personality': Tone and behavior style of the agent.
+-- 'skill_md': Prompt instructions written in Markdown defining what the agent does.
+-- 'status': 'active' (can explore and chat) or 'paused' (frozen by owner).
+-- 'is_public': If true, other network agents can discover and talk to this agent.
+-- 'last_run_at': Timestamp of the last time this agent took an action.
+-- ------------------------------------------------------------------------------
 create table if not exists public.agents (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
@@ -28,7 +61,19 @@ create table if not exists public.agents (
   created_at timestamptz not null default now()
 );
 
--- 1.3 Conversations (agent-to-agent peer threads)
+-- ------------------------------------------------------------------------------
+-- 1.3 CONVERSATIONS (Agent-to-Agent Dialogues)
+-- ------------------------------------------------------------------------------
+-- When two agents interact autonomously, they start a conversation thread.
+-- 'initiator_agent_id': The agent that kicked off the discussion.
+-- 'target_agent_id': The agent that received the inquiry.
+-- 'status': 
+--    'live'   = Conversation is actively taking place.
+--    'done'   = Conversation completed its goal successfully.
+--    'capped' = Reached max allowed turns (prevents infinite conversational loops).
+-- 'turn_count': Current number of message exchanges.
+-- 'max_turns': Safety limit (default 6 turns max).
+-- ------------------------------------------------------------------------------
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
   initiator_agent_id uuid not null references public.agents(id) on delete cascade,
@@ -39,7 +84,14 @@ create table if not exists public.conversations (
   created_at timestamptz not null default now()
 );
 
--- 1.4 Messages (chat turns between agents)
+-- ------------------------------------------------------------------------------
+-- 1.4 MESSAGES (Individual Chat Turns)
+-- ------------------------------------------------------------------------------
+-- Stores the individual messages exchanged inside an agent conversation.
+-- 'conversation_id': Identifies which conversation this message belongs to.
+-- 'sender_agent_id': Which of the two agents sent this specific message.
+-- 'content': The actual dialogue text generated by the agent.
+-- ------------------------------------------------------------------------------
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
@@ -48,7 +100,17 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
--- 1.5 Inbox Items (agent findings reported to owner)
+-- ------------------------------------------------------------------------------
+-- 1.5 INBOX ITEMS (Synthesized Findings for the Human Owner)
+-- ------------------------------------------------------------------------------
+-- Once agents finish talking, they summarize key findings for their human owner.
+-- This keeps humans from having to read long raw logs.
+-- 'owner_id': The human recipient who receives this briefing.
+-- 'agent_id': Which of their agents brought back this finding.
+-- 'conversation_id': Optional link to view the underlying full agent conversation.
+-- 'summary': Quick 1-2 sentence briefing (e.g. "Found a match with Elena's agent!").
+-- 'status': 'unread', 'read', or 'dismissed'.
+-- ------------------------------------------------------------------------------
 create table if not exists public.inbox_items (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
@@ -59,42 +121,61 @@ create table if not exists public.inbox_items (
   created_at timestamptz not null default now()
 );
 
--- ============================================================
--- 2. ROW LEVEL SECURITY (RLS)
--- ============================================================
 
+-- ==============================================================================
+-- 2. ROW LEVEL SECURITY (RLS)
+-- ==============================================================================
+-- In PostgreSQL/Supabase, RLS acts as a security guard on every single table.
+-- Without RLS policies, clients cannot read or write data.
+-- 'auth.uid()' is a Supabase function that returns the logged-in user's UUID.
+-- ==============================================================================
+
+-- Step A: Enable RLS on all tables so nothing is accessible by default
 alter table public.profiles enable row level security;
 alter table public.agents enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.inbox_items enable row level security;
 
--- Profiles: Authenticated users can read any profile; users only insert/update their own
+-- ------------------------------------------------------------------------------
+-- 2.1 PROFILES POLICIES
+-- ------------------------------------------------------------------------------
+-- Rule 1: Any logged-in member can read other members' profiles (for network exploration).
 drop policy if exists "Profiles are viewable by authenticated users" on public.profiles;
-create policy "Profiles are viewable by authenticated users"
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_authenticated"
   on public.profiles for select
   to authenticated
   using (true);
 
-drop policy if exists "Users can update their own profile" on public.profiles;
-create policy "Users can update their own profile"
-  on public.profiles for update
-  to authenticated
-  using (auth.uid() = id);
-
+-- Rule 2: A member can insert their profile row matching their auth ID.
 drop policy if exists "Users can insert their own profile" on public.profiles;
-create policy "Users can insert their own profile"
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
   on public.profiles for insert
   to authenticated
-  with check (auth.uid() = id);
+  with check ((select auth.uid()) = id);
 
--- Agents: Public agents viewable by all logged-in members; owners have full control
+-- Rule 3: A member can ONLY edit their own profile.
+drop policy if exists "Users can update their own profile" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
+  on public.profiles for update
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+-- ------------------------------------------------------------------------------
+-- 2.2 AGENTS POLICIES
+-- ------------------------------------------------------------------------------
+-- Rule 1: Anyone logged in can see public agents; owners can always see their own.
 drop policy if exists "Public agents viewable by authenticated users" on public.agents;
 create policy "Public agents viewable by authenticated users"
   on public.agents for select
   to authenticated
   using (is_public = true or owner_id = auth.uid());
 
+-- Rule 2: Only the owner has full permissions (create, edit, delete, pause) on their agent.
 drop policy if exists "Owners have full control over their agents" on public.agents;
 create policy "Owners have full control over their agents"
   on public.agents for all
@@ -102,7 +183,11 @@ create policy "Owners have full control over their agents"
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 
--- Conversations: Viewable and insertable only by owners of the participating agents
+-- ------------------------------------------------------------------------------
+-- 2.3 CONVERSATIONS POLICIES
+-- ------------------------------------------------------------------------------
+-- Conversations are private! Only the humans who own either the initiator agent
+-- or target agent are permitted to see or start a conversation thread.
 drop policy if exists "Owners can view conversations involving their agents" on public.conversations;
 create policy "Owners can view conversations involving their agents"
   on public.conversations for select
@@ -127,7 +212,11 @@ create policy "Agent owners can insert conversations"
     )
   );
 
--- Messages: Viewable and insertable only by owners of participating agents
+-- ------------------------------------------------------------------------------
+-- 2.4 MESSAGES POLICIES
+-- ------------------------------------------------------------------------------
+-- Messages inside a conversation can only be seen or inserted by the owners
+-- of the agents taking part in that dialogue.
 drop policy if exists "Owners can view messages in their conversations" on public.messages;
 create policy "Owners can view messages in their conversations"
   on public.messages for select
@@ -153,7 +242,11 @@ create policy "Owners can insert messages"
     )
   );
 
--- Inbox Items: Strictly restricted to the recipient owner
+-- ------------------------------------------------------------------------------
+-- 2.5 INBOX ITEMS POLICIES
+-- ------------------------------------------------------------------------------
+-- Your inbox is strictly private. Only you (the recipient owner) can view,
+-- mark as read, or dismiss your findings.
 drop policy if exists "Owners have full access to their inbox items" on public.inbox_items;
 create policy "Owners have full access to their inbox items"
   on public.inbox_items for all
@@ -161,43 +254,59 @@ create policy "Owners have full access to their inbox items"
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 
--- ============================================================
--- 3. AUTOMATIC PROFILE TRIGGER ON AUTH SIGNUP
--- ============================================================
+
+-- ==============================================================================
+-- 3. AUTOMATIC PROFILE TRIGGER ON SIGNUP
+-- ==============================================================================
+-- When a user registers through Supabase Auth (e.g. email/password), a row is
+-- created in the internal 'auth.users' table.
+-- This function and trigger automatically creates their public profile in 'public.profiles'
+-- copying over the chosen username and handle from signup metadata.
+-- ==============================================================================
 
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
-  insert into public.profiles (id, username, handle)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'username', new.raw_user_meta_data->>'name', 'New Member'),
-    coalesce(new.raw_user_meta_data->>'handle', new.raw_user_meta_data->>'username', 'user_' || substr(replace(new.id::text, '-', ''), 1, 8))
-  )
-  on conflict (id) do update set
-    username = excluded.username,
-    handle = excluded.handle;
+  insert into public.profiles (id)
+  values (new.id)
+  on conflict (id) do nothing;
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
+-- Connect the function to the auth.users table on every new signup
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- ============================================================
+
+-- ==============================================================================
 -- 4. REALTIME PUBLICATION SETUP
--- ============================================================
+-- ==============================================================================
+-- In Supabase, the 'supabase_realtime' publication streams database changes
+-- over WebSockets directly to the Next.js frontend.
+-- This ensures new inbox notifications, conversations, and chat messages
+-- appear on screen instantly in real-time without the user having to refresh.
+-- ==============================================================================
 
 do $$
 begin
+  -- Stream live inbox items
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'inbox_items') then
     alter publication supabase_realtime add table public.inbox_items;
   end if;
+  
+  -- Stream live conversation thread status changes
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'conversations') then
     alter publication supabase_realtime add table public.conversations;
   end if;
+  
+  -- Stream live chat messages between agents
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'messages') then
     alter publication supabase_realtime add table public.messages;
   end if;

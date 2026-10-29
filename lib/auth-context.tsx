@@ -40,16 +40,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(u);
           const p = await db.getProfile(session.user.id);
           if (mounted) setProfile(p);
-        } else {
-          // If no active session, check for mock demo session
-          const savedUserId = localStorage.getItem('plus1_session_user_id');
-          if (savedUserId) {
-            const p = await db.getProfile(savedUserId);
-            if (p && mounted) {
-              setUser({ id: p.id, email: `${p.handle}@example.com` });
-              setProfile(p);
-            }
-          }
         }
         if (mounted) setIsLoading(false);
       });
@@ -98,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Route protection per screens.md §0.3
+  // Client-side route protection (supplements server-side middleware)
   useEffect(() => {
     if (isLoading) return;
     const publicRoutes = ['/', '/login', '/signup'];
@@ -106,8 +96,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!user && !isPublic) {
       router.push('/login');
-    } else if (user && profile && (!profile.handle || (!profile.username && !profile.name)) && pathname !== '/onboarding') {
-      router.push('/onboarding');
+    } else if (user && pathname !== '/onboarding') {
+      // If profile is missing or username is null -> onboarding
+      if (!profile || !profile.username) {
+        router.push('/onboarding');
+      }
     }
   }, [user, profile, isLoading, pathname, router]);
 
@@ -125,10 +118,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.user) {
           const u = { id: data.user.id, email: data.user.email || email };
           setUser(u);
-          localStorage.setItem('plus1_session_user_id', data.user.id);
           const p = await db.getProfile(data.user.id);
           setProfile(p);
-          router.push('/home');
+
+          // If profile is incomplete, go to onboarding; otherwise home
+          if (!p || !p.username) {
+            router.push('/onboarding');
+          } else {
+            router.push('/home');
+          }
+          router.refresh();
           return;
         }
       }
@@ -139,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!existing) {
         const id = crypto.randomUUID();
         const formattedUsername = handle.charAt(0).toUpperCase() + handle.slice(1);
-        existing = await db.updateProfile(id, {
+        existing = await db.upsertProfile(id, {
           username: formattedUsername,
           name: formattedUsername,
           handle,
@@ -187,7 +186,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           const u = { id: data.user.id, email: data.user.email || email };
           setUser(u);
-          localStorage.setItem('plus1_session_user_id', data.user.id);
 
           const p = await db.getProfile(data.user.id);
           setProfile(p);
@@ -198,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Fallback local signup
       const newId = crypto.randomUUID();
-      const created = await db.updateProfile(newId, {
+      const created = await db.upsertProfile(newId, {
         username: cleanUsername,
         name: cleanUsername,
         handle: cleanHandle,
@@ -223,11 +221,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     router.push('/');
+    router.refresh();
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
-    if (!profile) return;
-    const updated = await db.updateProfile(profile.id, updates);
+    if (!user) return;
+    // Use upsert so it works whether or not the profile row exists
+    const updated = await db.upsertProfile(user.id, updates);
     setProfile(updated);
   };
 

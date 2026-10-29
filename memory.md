@@ -70,3 +70,14 @@ plus1/
 - Domain / deployment URL: TBD
 - CTA links (Create your agent, Log in): placeholder `#` for now
 - Social links in footer: TBD
+
+## 6. Decision Log
+
+| Date | Topic | Decision & Implementation Details | Status |
+|---|---|---|---|
+| 2026-10-29 | Auth & Cascade Foreign Key | `public.profiles.id` is PK referencing `auth.users(id) ON DELETE CASCADE`. Deleting a user from `auth.users` automatically cascades to remove the profile, agents, conversations, and inbox records. | Implemented |
+| 2026-10-29 | Server-Side Route Guard | Migrated browser client in `lib/supabase/client.ts` to `createBrowserClient` (@supabase/ssr) so sessions write to cookies. `middleware.ts` guards protected routes using `getUser()` + `maybeSingle()`, redirecting un-onboarded users to `/onboarding`. | Implemented |
+| 2026-10-29 | Onboarding Flow | Onboarding upserts on `id = user.id`, strictly validates `username` against `^[a-z0-9_]{3,20}$`, and handles Postgres `23505` unique violation error cleanly. | Implemented |
+| 2026-10-29 | Account Deletion | Added user-facing Delete Account button in profile (`app/u/[handle]/page.tsx`) triggering backend endpoint `/api/account/delete`, which deletes from `auth.users` by PK `id` using `auth.admin.deleteUser`. | Implemented |
+| 2026-10-30 | Deletion Cascade Resilience | In `/api/account/delete`, explicitly delete from `public.profiles` alongside `admin.deleteUser` to guarantee row removal even if DB foreign key hasn't been executed. Updated migration 004 to purge orphaned profile IDs before applying FK cascade. | Implemented |
+

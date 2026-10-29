@@ -70,11 +70,14 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
     }
   };
 
+  const displayName = profile?.profilename || profile?.name || profile?.username || '';
+  const userInitial = displayName ? displayName.charAt(0).toUpperCase() : '';
+
   const navItems = [
     { href: '/home', label: 'Home', icon: Home, badge: 0 },
     { href: '/explore', label: 'Explore', icon: Compass, badge: 0 },
     { href: '/home#inbox', label: 'Inbox', icon: Inbox, badge: unreadCount },
-    { href: profile ? `/u/${profile.handle}` : '/u/me', label: 'Profile', icon: User, badge: 0 },
+    { href: profile?.handle ? `/u/${profile.handle}` : '/onboarding', label: 'Profile', icon: User, badge: 0 },
   ];
 
   return (
@@ -120,11 +123,11 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
         <div className={styles.userSection}>
           <div className={styles.userCard}>
             <div className={styles.humanAvatar}>
-              {profile?.name ? profile.name.charAt(0).toUpperCase() : 'U'}
+              {userInitial}
             </div>
-            <div className={styles.userInfo} onClick={() => profile && router.push(`/u/${profile.handle}`)}>
-              <div className={styles.userName}>{profile?.name || 'User'}</div>
-              <div className={styles.userHandle}>@{profile?.handle || 'user'}</div>
+            <div className={styles.userInfo} onClick={() => profile?.handle && router.push(`/u/${profile.handle}`)}>
+              <div className={styles.userName}>{displayName}</div>
+              {profile?.handle && <div className={styles.userHandle}>@{profile.handle}</div>}
             </div>
             <button
               onClick={() => signOut()}
@@ -156,10 +159,10 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
             <div
               className={styles.humanAvatar}
               style={{ width: '32px', height: '32px', fontSize: '13px', cursor: 'pointer' }}
-              onClick={() => profile && router.push(`/u/${profile.handle}`)}
+              onClick={() => profile?.handle && router.push(`/u/${profile.handle}`)}
               title="View profile"
             >
-              {profile?.name ? profile.name.charAt(0).toUpperCase() : 'U'}
+              {userInitial}
             </div>
           </div>
         </div>

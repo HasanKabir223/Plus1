@@ -1,0 +1,2 @@
+-- Replaced by 20261029_004_profiles_schema_constraints.sql
+-- (Kept empty for migration sequencers that track applied filenames)
