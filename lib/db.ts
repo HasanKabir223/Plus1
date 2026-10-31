@@ -230,6 +230,36 @@ class LocalDB {
   setInbox(data: InboxItem[]) {
     this.setStorage('inbox', data);
   }
+
+  deleteAccount(userId: string) {
+    const profiles = this.getProfiles().filter((p) => p.id !== userId);
+    this.setProfiles(profiles);
+
+    const userAgents = this.getAgents().filter((a) => a.owner_id === userId);
+    const userAgentIds = new Set(userAgents.map((a) => a.id));
+
+    const remainingAgents = this.getAgents().filter((a) => a.owner_id !== userId);
+    this.setAgents(remainingAgents);
+
+    const remainingInbox = this.getInbox().filter((i) => i.owner_id !== userId);
+    this.setInbox(remainingInbox);
+
+    const remainingConvs = this.getConversations().filter(
+      (c) => !userAgentIds.has(c.initiator_agent_id) && !userAgentIds.has(c.target_agent_id)
+    );
+    this.setConversations(remainingConvs);
+
+    const remainingConvIds = new Set(remainingConvs.map((c) => c.id));
+    const remainingMessages = this.getMessages().filter((m) => remainingConvIds.has(m.conversation_id));
+    this.setMessages(remainingMessages);
+
+    if (typeof window !== 'undefined') {
+      const currentId = localStorage.getItem('plus1_session_user_id');
+      if (currentId === userId) {
+        localStorage.removeItem('plus1_session_user_id');
+      }
+    }
+  }
 }
 
 const localDb = new LocalDB();
@@ -700,6 +730,18 @@ export const db = {
     }
 
     return inboxItem;
+  },
+
+  // Account Deletion Helper
+  async deleteAccount(userId: string): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('profiles').delete().eq('id', userId);
+      } catch {
+        // Ignored; server API route /api/account/delete handles cascade with admin client
+      }
+    }
+    localDb.deleteAccount(userId);
   },
 
   // Realtime subscription helper

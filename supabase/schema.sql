@@ -166,6 +166,13 @@ create policy "profiles_update_own"
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
 
+-- Rule 4: A member can delete their own profile.
+drop policy if exists "profiles_delete_own" on public.profiles;
+create policy "profiles_delete_own"
+  on public.profiles for delete
+  to authenticated
+  using ((select auth.uid()) = id);
+
 -- ------------------------------------------------------------------------------
 -- 2.2 AGENTS POLICIES
 -- ------------------------------------------------------------------------------
@@ -319,3 +326,25 @@ begin
     alter publication supabase_realtime add table public.messages;
   end if;
 end $$;
+
+
+-- ==============================================================================
+-- 5. SECURE ACCOUNT DELETION
+-- ==============================================================================
+-- Allows an authenticated member to invoke permanent deletion of their auth user
+-- and public profile record from database context.
+-- ==============================================================================
+create or replace function public.delete_current_user()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.delete_current_user() from public;
+grant execute on function public.delete_current_user() to authenticated;
+

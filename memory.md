@@ -60,7 +60,7 @@ plus1/
 │   ├── threads/[id]/page.tsx           # Live agent-to-agent conversation thread viewer
 │   ├── u/[handle]/page.tsx             # User profile page (/u/[username]) + Danger Zone delete
 │   └── api/
-│       └── account/delete/route.ts     # User account deletion endpoint (anon client + RLS)
+│       └── account/delete/route.ts     # User account deletion endpoint (Admin client auth.admin.deleteUser + RLS/RPC)
 ├── components/
 │   ├── AppShell.tsx                    # Twitter/X style navigation rail & sidebar layout
 │   ├── AppShell.module.css
@@ -94,9 +94,11 @@ plus1/
 │       ├── 20261029_003_profiles_rls.sql
 │       ├── 20261029_004_cascade_delete.sql
 │       ├── 20261030_refactor_profiles_schema.sql
-│       └── 20261031_remove_dummy_profile_defaults.sql
+│       ├── 20261031_remove_dummy_profile_defaults.sql
+│       └── 20261031_account_deletion.sql
 └── scripts/
-    └── test-onboarding-logic.mjs       # Comprehensive unit tests for onboarding & route guard logic
+    ├── test-onboarding-logic.mjs       # Comprehensive unit tests for onboarding & route guard logic
+    └── test-account-deletion.mjs       # Comprehensive unit and integration tests for account deletion
 ```
 
 ---
@@ -171,11 +173,14 @@ flowchart TD
 | 2026-10-31 | Schema Refactor & Direct Auth Architecture | Dropped `handle` column; adopted `username` (unique handle) and `profilename` (display name at top). Switched to instant login on `/signup` with Supabase email confirmation OFF. Enforced generic error messages and restricted all code strictly to anon keys. | Implemented |
 | 2026-10-31 | Route Normalization & /signin Alias | Normalized trailing slashes in `proxy.ts` and `auth-context.tsx` to prevent trailing slash false positives. Added official `/signin` alias to `/login`. | Implemented |
 | 2026-10-31 | Onboarding Flow & Dummy Fallback Removal | Eliminated hardcoded 'New Member' and 'user_xxxx' dummy defaults from `handle_new_user()` trigger and DB schema (`20261031_remove_dummy_profile_defaults.sql`). New profiles start with NULL `username` and `profilename`. Updated `proxy.ts`, `auth-context.tsx`, `db.ts`, and `onboarding/page.tsx` so un-onboarded users are strictly forced to `/onboarding`, only custom inputs mark profile as onboarded, and upon completion redirect to `/`. Fixed `isDummyProfileName` to reject empty/whitespace profile names, aligned SQL trigger with `NULLIF(TRIM(...), '')` to prevent CHECK constraint violations, cleaned `INITIAL_PROFILES` seed data, filtered un-onboarded profiles from Explore search, and closed fallback `signIn` account creation hole. | Implemented |
+| 2026-10-31 | Profile & Auth Deletion Restoration | Fixed account deletion failure where `auth.users` and `public.profiles` rows were not removed. Re-introduced server-side admin client in `lib/supabase/server.ts` utilizing `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY` strictly in route handler (`app/api/account/delete/route.ts`). Explicitly delete from `public.profiles` via admin client (bypassing RLS) and permanently delete auth user via `adminClient.auth.admin.deleteUser(user.id)`. Added fallback to `public.delete_current_user()` RPC and client-side `profiles_delete_own` RLS policy (`20261031_account_deletion.sql`). Added `deleteAccount` to `LocalDB` in `lib/db.ts` to ensure cascades work in local offline development, and wrapped client `signOut` to gracefully swallow any post-deletion invalid session exceptions. Verified with automated live test `scripts/test-account-deletion.mjs`. | Implemented |
 
 ---
 
 ## 8. Open Decisions & Notes
 
-- **Remote Database Sync**: To ensure the cloud Supabase instance matches local schema, execute the SQL migration `supabase/migrations/20261031_remove_dummy_profile_defaults.sql` in the Supabase Dashboard SQL Editor.
+- **Remote Database Sync**: To ensure the cloud Supabase instance matches local schema, execute the SQL migrations in the Supabase Dashboard SQL Editor:
+  1. `supabase/migrations/20261031_remove_dummy_profile_defaults.sql` (dummy fallback removal)
+  2. `supabase/migrations/20261031_account_deletion.sql` (RLS delete policy and cascade RPC)
 - **Email Confirmation**: Must remain toggled **OFF** in Supabase Dashboard (**Authentication &rarr; Providers &rarr; Email**) so signups log in immediately and proceed directly to `/onboarding`.
 - **Domain & Deployment**: Ready for Vercel deployment with Next.js 16 App Router and Turbopack.

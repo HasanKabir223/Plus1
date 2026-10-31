@@ -246,7 +246,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.warn('SignOut error ignored (user may already be deleted):', err);
+      }
     }
     localStorage.removeItem('plus1_session_user_id');
     setUser(null);

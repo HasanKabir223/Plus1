@@ -117,8 +117,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         method: 'POST',
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to delete account');
+      }
+      try {
+        await db.deleteAccount(user.id);
+      } catch {
+        // Ignored
       }
       await signOut();
       router.push('/');
