@@ -40,13 +40,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
       setIsLoading(true);
       setError(null);
       const cleanHandle = handleParam.replace(/^@/, '');
-      const p = await db.getProfileByHandle(cleanHandle);
+      const p = await db.getProfileByUsername(cleanHandle);
       if (!p) {
         setError('Profile not found');
         return;
       }
       setProfile(p);
-      setEditName(p.name);
+      setEditName(p.profilename || p.name || p.username);
       setEditBio(p.bio);
       setEditTags(p.looking_for || []);
 
@@ -179,7 +179,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 flexShrink: 0,
               }}
             >
-              {profile.name.charAt(0).toUpperCase()}
+              {(profile.profilename || profile.name || profile.username || 'U').charAt(0).toUpperCase()}
             </div>
 
             {isOwner && !isEditing && (
@@ -197,9 +197,11 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
             /* Normal View */
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>{profile.name}</h1>
+                <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>
+                  {profile.profilename || profile.name || profile.username}
+                </h1>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--ink-soft)' }}>
-                  @{profile.handle}
+                  @{profile.username}
                 </span>
                 {isOwner && (
                   <span className="chip chip-human" style={{ fontSize: '10px', padding: '2px 6px' }}>

@@ -32,6 +32,7 @@ lerna-debug.log*
 
 # Testing & Coverage
 /coverage
+scripts/test-onboarding-logic.mjs
 
 # Vercel
 .vercel

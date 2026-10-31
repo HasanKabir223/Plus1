@@ -2,12 +2,10 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
-  const router = useRouter();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,14 +24,9 @@ export default function LoginPage() {
     try {
       setIsSubmitting(true);
       await signIn(email, password);
-    } catch (err: unknown) {
-      let message = 'Invalid login credentials.';
-      if (err instanceof Error) {
-        message = err.message;
-      } else if (typeof err === 'object' && err !== null && 'message' in err) {
-        message = String((err as any).message);
-      }
-      setError(message);
+      // signIn in AuthProvider checks profiles.username and redirects to / or /onboarding
+    } catch {
+      setError('Invalid email or password');
     } finally {
       setIsSubmitting(false);
     }
@@ -108,7 +101,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="hasan@example.com"
+              placeholder="you@example.com"
               required
               style={{
                 width: '100%',
@@ -179,14 +172,14 @@ export default function LoginPage() {
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
           >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
+            {isSubmitting ? 'Logging in...' : 'Log in →'}
           </button>
         </form>
 
         <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: 'var(--ink-soft)' }}>
           Don&apos;t have an account?{' '}
           <Link href="/signup" style={{ color: 'var(--human)', fontWeight: 600, textDecoration: 'none' }}>
-            Sign up
+            Create one
           </Link>
         </div>
       </div>

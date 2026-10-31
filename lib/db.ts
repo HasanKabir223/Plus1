@@ -5,8 +5,9 @@ import type { Profile, Agent, Conversation, Message, InboxItem } from '@/types/d
 const INITIAL_PROFILES: Profile[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
-    username: 'Hasan Kabir',
+    username: 'hasan',
     name: 'Hasan Kabir',
+    profilename: 'Hasan Kabir',
     handle: 'hasan',
     bio: 'Building human-agent networks. Full-stack & agentic workflows.',
     looking_for: ['teammates', 'hackathon', 'mentorship'],
@@ -14,8 +15,9 @@ const INITIAL_PROFILES: Profile[] = [
   },
   {
     id: '00000000-0000-0000-0000-000000000002',
-    username: 'Elena Rostova',
+    username: 'elena_r',
     name: 'Elena Rostova',
+    profilename: 'Elena Rostova',
     handle: 'elena_r',
     bio: 'Distributed systems engineer. Exploring collaborative multi-agent protocols.',
     looking_for: ['collaborators', 'distributed-systems'],
@@ -23,8 +25,9 @@ const INITIAL_PROFILES: Profile[] = [
   },
   {
     id: '00000000-0000-0000-0000-000000000003',
-    username: 'Marcus Chen',
+    username: 'marcusc',
     name: 'Marcus Chen',
+    profilename: 'Marcus Chen',
     handle: 'marcusc',
     bio: 'Founder at LatentSpace. Seeking backend engineers & early pilot partners.',
     looking_for: ['leads', 'founders', 'pilot-partners'],
@@ -32,8 +35,9 @@ const INITIAL_PROFILES: Profile[] = [
   },
   {
     id: '00000000-0000-0000-0000-000000000004',
-    username: 'Aria Patel',
+    username: 'ariap',
     name: 'Aria Patel',
+    profilename: 'Aria Patel',
     handle: 'ariap',
     bio: 'ML researcher working on agent alignment and tool use evaluation.',
     looking_for: ['study-partner', 'researchers'],
@@ -230,6 +234,21 @@ class LocalDB {
 
 const localDb = new LocalDB();
 
+function isDummyUsername(username?: string | null): boolean {
+  if (!username) return true;
+  const clean = username.trim().toLowerCase();
+  if (!clean) return true;
+  if (clean.startsWith('user_') || /^user_[a-f0-9]{8}$/i.test(clean)) return true;
+  return false;
+}
+
+function isDummyProfileName(profilename?: string | null): boolean {
+  if (!profilename) return true;
+  const clean = profilename.trim().toLowerCase();
+  if (!clean) return true;
+  return clean === 'new member';
+}
+
 // Unified Database Access Layer API
 export const db = {
   // Profiles
@@ -237,61 +256,82 @@ export const db = {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
       if (error || !data) return null;
-      const username = data.username || '';
-      const name = data.profilename || data.name || username;
+      const rawUsername = data.username || '';
+      const rawProfileName = data.profilename || data.name || '';
+      const isDummyUser = isDummyUsername(rawUsername);
+      const isDummyName = isDummyProfileName(rawProfileName);
+      const username = isDummyUser ? '' : rawUsername.trim();
+      const profilename = isDummyName ? '' : rawProfileName.trim();
+      const name = profilename || username;
       return {
         ...data,
         username,
         name,
-        profilename: name,
-        handle: data.handle || username,
+        profilename,
+        handle: username,
       } as Profile;
     }
     const profiles = localDb.getProfiles();
     const found = profiles.find((p) => p.id === id);
     if (!found) return null;
-    const username = found.username || '';
-    const name = found.profilename || found.name || username;
+    const rawUsername = found.username || '';
+    const rawProfileName = found.profilename || found.name || '';
+    const isDummyUser = isDummyUsername(rawUsername);
+    const isDummyName = isDummyProfileName(rawProfileName);
+    const username = isDummyUser ? '' : rawUsername.trim();
+    const profilename = isDummyName ? '' : rawProfileName.trim();
+    const name = profilename || username;
     return {
       ...found,
       username,
       name,
-      profilename: name,
-      handle: found.handle || username,
+      profilename,
+      handle: username,
     };
   },
 
-  async getProfileByHandle(handle: string): Promise<Profile | null> {
-    const clean = handle.replace(/^@/, '').toLowerCase();
+  async getProfileByUsername(username: string): Promise<Profile | null> {
+    const clean = username.replace(/^@/, '').toLowerCase().trim();
+    if (!clean || isDummyUsername(clean)) return null;
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .or(`handle.ilike.${clean},username.ilike.${clean}`)
+        .ilike('username', clean)
         .maybeSingle();
       if (error || !data) return null;
-      const username = data.username || '';
-      const name = data.profilename || data.name || username;
+      const rawUsername = data.username || '';
+      const rawProfileName = data.profilename || data.name || '';
+      if (isDummyUsername(rawUsername)) return null;
+      const profilename = isDummyProfileName(rawProfileName) ? '' : rawProfileName.trim();
+      const uName = rawUsername.trim();
+      const name = profilename || uName;
       return {
         ...data,
-        username,
+        username: uName,
         name,
-        profilename: name,
-        handle: data.handle || username,
+        profilename,
+        handle: uName,
       } as Profile;
     }
     const profiles = localDb.getProfiles();
-    const found = profiles.find((p) => (p.handle && p.handle.toLowerCase() === clean) || (p.username && p.username.toLowerCase() === clean));
-    if (!found) return null;
-    const username = found.username || '';
-    const name = found.profilename || found.name || username;
+    const found = profiles.find((p) => p.username && p.username.toLowerCase() === clean);
+    if (!found || isDummyUsername(found.username)) return null;
+    const rawProfileName = found.profilename || found.name || '';
+    const profilename = isDummyProfileName(rawProfileName) ? '' : rawProfileName.trim();
+    const uName = (found.username || '').trim();
+    const name = profilename || uName;
     return {
       ...found,
-      username,
+      username: uName,
       name,
-      profilename: name,
-      handle: found.handle || username,
+      profilename,
+      handle: uName,
     };
+  },
+
+  async getProfileByHandle(handle: string): Promise<Profile | null> {
+    return this.getProfileByUsername(handle);
   },
 
   async upsertProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
@@ -304,9 +344,14 @@ export const db = {
     }
 
     if (isSupabaseConfigured && supabase) {
+      // Remote profiles table schema only has id, username, profilename, bio, looking_for, created_at
+      const remotePayload: Record<string, unknown> = { ...payload };
+      delete remotePayload.handle;
+      delete remotePayload.name;
+
       const { data, error } = await supabase
         .from('profiles')
-        .upsert({ id, ...payload }, { onConflict: 'id' })
+        .upsert({ id, ...remotePayload }, { onConflict: 'id' })
         .select()
         .single();
       if (error) throw error;
@@ -316,15 +361,17 @@ export const db = {
         ...data,
         username,
         name,
-        profilename: name,
+        profilename: data.profilename || name,
         handle: data.handle || username,
       } as Profile;
     }
 
     const profiles = localDb.getProfiles();
     const index = profiles.findIndex((p) => p.id === id);
-    const resolvedUsername = (updates.username || '').trim();
-    const resolvedName = (updates.profilename || updates.name || resolvedUsername).trim();
+    const resolvedUsername = updates.username !== undefined ? updates.username.trim() : '';
+    const resolvedName = updates.profilename !== undefined
+      ? updates.profilename.trim()
+      : (updates.name !== undefined ? updates.name.trim() : resolvedUsername);
 
     if (index === -1) {
       const created: Profile = {
@@ -344,10 +391,10 @@ export const db = {
     const updated = {
       ...profiles[index],
       ...payload,
-      username: resolvedUsername || profiles[index].username,
-      name: resolvedName || profiles[index].name,
-      profilename: resolvedName || profiles[index].profilename || profiles[index].name,
-      handle: updates.handle || profiles[index].handle,
+      username: updates.username !== undefined ? resolvedUsername : profiles[index].username,
+      name: updates.profilename !== undefined || updates.name !== undefined ? resolvedName : profiles[index].name,
+      profilename: updates.profilename !== undefined || updates.name !== undefined ? resolvedName : profiles[index].profilename,
+      handle: updates.handle || (updates.username !== undefined ? resolvedUsername : profiles[index].handle),
     };
     profiles[index] = updated;
     localDb.setProfiles([...profiles]);
@@ -360,23 +407,32 @@ export const db = {
 
   async searchProfiles(tag?: string, query?: string): Promise<Profile[]> {
     if (isSupabaseConfigured && supabase) {
-      let q = supabase.from('profiles').select('*');
+      let q = supabase
+        .from('profiles')
+        .select('*')
+        .not('username', 'is', null)
+        .neq('username', '')
+        .not('username', 'like', 'user_%');
       if (tag) q = q.contains('looking_for', [tag]);
       if (query) q = q.or(`username.ilike.%${query}%,bio.ilike.%${query}%,handle.ilike.%${query}%,profilename.ilike.%${query}%`);
       const { data } = await q;
-      return ((data || []) as any[]).map((p) => {
-        const username = p.username || '';
-        const name = p.profilename || p.name || username;
-        return {
-          ...p,
-          username,
-          name,
-          profilename: name,
-          handle: p.handle || username,
-        };
-      }) as Profile[];
+      return ((data || []) as any[])
+        .filter((p) => !isDummyUsername(p.username) && !isDummyProfileName(p.profilename || p.name))
+        .map((p) => {
+          const username = (p.username || '').trim();
+          const profilename = (p.profilename || p.name || '').trim();
+          const name = profilename || username;
+          return {
+            ...p,
+            username,
+            name,
+            profilename: name,
+            handle: p.handle || username,
+          };
+        }) as Profile[];
     }
     let list = localDb.getProfiles();
+    list = list.filter((p) => !isDummyUsername(p.username) && !isDummyProfileName(p.profilename || p.name));
     if (tag) {
       list = list.filter((p) => p.looking_for.includes(tag));
     }

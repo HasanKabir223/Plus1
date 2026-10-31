@@ -1,12 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 /**
  * Server-side client using cookies to authenticate as the current user.
- * Use for reading caller credentials with supabase.auth.getUser().
+ * Uses ONLY NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
  */
-export async function createSupabaseServerClient() {
+export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -32,23 +31,5 @@ export async function createSupabaseServerClient() {
   );
 }
 
-/**
- * Server-side Admin client using SUPABASE_SERVICE_ROLE_KEY.
- * NEVER expose this to the browser/frontend!
- * Used for admin operations like deleting users via auth.admin.deleteUser.
- */
-export function createSupabaseAdminClient() {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase admin configuration missing (NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY).');
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
+// Alias for backwards compatibility
+export const createSupabaseServerClient = createClient;

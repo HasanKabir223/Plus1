@@ -281,7 +281,7 @@ export default function ExplorePage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
                           <Link
-                            href={`/u/${p.handle || p.username}`}
+                            href={`/u/${p.username}`}
                             style={{
                               fontSize: '15px',
                               fontWeight: 700,
@@ -299,7 +299,7 @@ export default function ExplorePage() {
                               color: 'var(--ink-soft)',
                             }}
                           >
-                            @{p.handle || p.username}
+                            @{p.username}
                           </span>
                         </div>
 
@@ -333,7 +333,7 @@ export default function ExplorePage() {
                     </div>
 
                     <Link
-                      href={`/u/${p.handle}`}
+                      href={`/u/${p.username}`}
                       className="btn-secondary"
                       style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0, alignSelf: 'flex-start' }}
                     >
@@ -419,7 +419,7 @@ export default function ExplorePage() {
                               color: 'var(--ink-soft)',
                             }}
                           >
-                            by @{agent.owner.handle}
+                            by @{agent.owner.username}
                           </span>
                         )}
                         <span

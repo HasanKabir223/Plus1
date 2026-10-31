@@ -3,8 +3,8 @@ export type Profile = {
   user_id?: string;
   username: string;
   profilename?: string;
-  name: string;
-  handle: string;
+  name?: string;
+  handle?: string;
   bio: string;
   looking_for: string[];
   created_at: string;

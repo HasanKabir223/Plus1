@@ -198,8 +198,8 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 {owner && (
                   <div style={{ fontSize: '13px', color: 'var(--ink-soft)', marginTop: '2px', wordBreak: 'break-word' }}>
                     Owned by{' '}
-                    <Link href={`/u/${owner.handle}`} style={{ color: 'var(--human)', fontWeight: 600 }}>
-                      @{owner.handle}
+                    <Link href={`/u/${owner.username}`} style={{ color: 'var(--human)', fontWeight: 600 }}>
+                      @{owner.username}
                     </Link>
                   </div>
                 )}

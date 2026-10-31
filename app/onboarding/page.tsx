@@ -18,12 +18,26 @@ const SUGGESTED_TAGS = [
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
+const getCleanDisplayName = (p?: { profilename?: string; name?: string } | null) => {
+  if (!p) return '';
+  const name = p.profilename || p.name || '';
+  if (name.trim().toLowerCase() === 'new member') return '';
+  return name;
+};
+
+const getCleanUsername = (p?: { username?: string; handle?: string } | null) => {
+  if (!p) return '';
+  const u = (p.username || p.handle || '').trim().toLowerCase();
+  if (u.startsWith('user_') || /^user_[a-f0-9]{8}$/i.test(u)) return '';
+  return u;
+};
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, profile, updateProfile } = useAuth();
+  const { user, profile, updateProfile, signOut } = useAuth();
 
-  const [displayName, setDisplayName] = useState(profile?.profilename || profile?.name || '');
-  const [username, setUsername] = useState(profile?.username || profile?.handle || '');
+  const [displayName, setDisplayName] = useState(getCleanDisplayName(profile));
+  const [username, setUsername] = useState(getCleanUsername(profile));
   const [bio, setBio] = useState(profile?.bio || '');
   const [selectedTags, setSelectedTags] = useState<string[]>(profile?.looking_for || []);
   const [usernameError, setUsernameError] = useState<string | null>(null);
@@ -33,9 +47,11 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (profile) {
-      if (!displayName) setDisplayName(profile.profilename || profile.name || '');
-      if (!username) setUsername(profile.username || profile.handle || '');
-      if (!bio) setBio(profile.bio || '');
+      const pName = getCleanDisplayName(profile);
+      const uName = getCleanUsername(profile);
+      if (!displayName && pName) setDisplayName(pName);
+      if (!username && uName) setUsername(uName);
+      if (!bio && profile.bio) setBio(profile.bio);
       if (selectedTags.length === 0 && profile.looking_for) setSelectedTags(profile.looking_for);
     }
   }, [profile]);
@@ -44,7 +60,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     const clean = username.trim().toLowerCase();
     if (!clean) {
-      setUsernameError('Username is required.');
+      setUsernameError(null);
       return;
     }
 
@@ -53,7 +69,13 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (clean === profile?.username) {
+    if (clean.startsWith('user_')) {
+      setUsernameError('Usernames starting with "user_" are reserved. Please choose another.');
+      return;
+    }
+
+    const currentClean = getCleanUsername(profile);
+    if (clean === currentClean) {
       setUsernameError(null);
       return;
     }
@@ -61,7 +83,7 @@ export default function OnboardingPage() {
     setIsCheckingUsername(true);
     const timer = setTimeout(async () => {
       try {
-        const existing = await db.getProfileByHandle(clean);
+        const existing = await db.getProfileByUsername(clean);
         if (existing && existing.id !== user?.id) {
           setUsernameError('This username is already taken. Please choose another.');
         } else {
@@ -88,7 +110,7 @@ export default function OnboardingPage() {
     setGeneralError(null);
 
     const cleanUsername = username.trim().toLowerCase();
-    const cleanName = displayName.trim() || cleanUsername;
+    const cleanName = displayName.trim();
 
     if (!cleanUsername) {
       setUsernameError('Username is required.');
@@ -100,7 +122,22 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (usernameError) return;
+    if (cleanUsername.startsWith('user_')) {
+      setUsernameError('Usernames starting with "user_" are reserved. Please choose another.');
+      return;
+    }
+
+    if (!cleanName) {
+      setGeneralError('Display Name is required.');
+      return;
+    }
+
+    if (cleanName.toLowerCase() === 'new member') {
+      setGeneralError('Please enter a valid personal display name.');
+      return;
+    }
+
+    if (usernameError || isCheckingUsername) return;
 
     if (!user) {
       router.push('/login');
@@ -111,14 +148,12 @@ export default function OnboardingPage() {
       setIsSaving(true);
       await updateProfile({
         username: cleanUsername,
-        handle: cleanUsername,
         profilename: cleanName,
-        name: cleanName,
         bio: bio.trim(),
         looking_for: selectedTags,
       });
 
-      router.push('/home');
+      router.push('/');
       router.refresh();
     } catch (err: unknown) {
       const errObj = err as { code?: string; message?: string };
@@ -330,13 +365,33 @@ export default function OnboardingPage() {
 
           <button
             type="submit"
-            disabled={isSaving || Boolean(usernameError)}
+            disabled={isSaving || !username.trim() || !displayName.trim() || Boolean(usernameError) || isCheckingUsername}
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center', marginTop: '12px' }}
           >
             {isSaving ? 'Saving profile...' : 'Continue to Home →'}
           </button>
         </form>
+
+        <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--ink-soft)' }}>
+          Need to switch accounts?{' '}
+          <button
+            type="button"
+            onClick={() => signOut()}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: 'var(--human)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              fontSize: '13px',
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   );

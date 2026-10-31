@@ -1,6 +1,21 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+function isDummyUsername(username?: string | null): boolean {
+  if (!username) return true;
+  const clean = username.trim().toLowerCase();
+  if (!clean) return true;
+  if (clean.startsWith('user_') || /^user_[a-f0-9]{8}$/i.test(clean)) return true;
+  return false;
+}
+
+function isDummyProfileName(profilename?: string | null): boolean {
+  if (!profilename) return true;
+  const clean = profilename.trim().toLowerCase();
+  if (!clean) return true;
+  return clean === 'new member';
+}
+
 export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,15 +44,17 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // Use getUser() instead of getSession() for strict server-side authentication
+  // Use getUser() for secure server-side session authentication
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
+  // Normalize pathname by stripping trailing slashes (e.g. /signup/ -> /signup)
+  const rawPathname = request.nextUrl.pathname;
+  const pathname = rawPathname.replace(/\/+$/, '') || '/';
 
-  // Public unauthenticated routes
-  const publicRoutes = ['/', '/login', '/signup'];
+  // Public unauthenticated routes (including /signin alias)
+  const publicRoutes = ['/', '/login', '/signup', '/signin'];
   const isPublicRoute = publicRoutes.includes(pathname);
 
   // Let API routes handle their own authentication
@@ -45,47 +62,55 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // 1. If not authenticated and trying to access a protected route -> redirect to /login
+  // Alias /signin to /login
+  if (pathname === '/signin') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  // 1. Send logged-out users to /login (except /, /login, /signup, /signin)
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  // 2. If authenticated:
+  // 2. Logged-in users handling
   if (user) {
-    // Check if user has completed onboarding by checking public.profiles
+    // Check if user has completed onboarding in public.profiles
     const { data: profile } = await supabase
       .from('profiles')
-      .select('username')
+      .select('username, profilename')
       .eq('id', user.id)
       .maybeSingle();
 
-    const isOnboarded = Boolean(profile && profile.username);
+    const username = profile?.username;
+    const profilename = profile?.profilename;
 
-    // If on /login or /signup:
-    if (pathname === '/login' || pathname === '/signup') {
+    const isOnboarded = Boolean(
+      !isDummyUsername(username) &&
+      !isDummyProfileName(profilename)
+    );
+
+    // Send logged-in users away from /login, /signup, /signin
+    if (pathname === '/login' || pathname === '/signup' || pathname === '/signin') {
       const url = request.nextUrl.clone();
-      url.pathname = isOnboarded ? '/home' : '/onboarding';
+      url.pathname = isOnboarded ? '/' : '/onboarding';
       return NextResponse.redirect(url);
     }
 
-    // If on /onboarding:
-    if (pathname === '/onboarding') {
-      if (isOnboarded) {
-        // Already onboarded, no need to be on /onboarding
-        const url = request.nextUrl.clone();
-        url.pathname = '/home';
-        return NextResponse.redirect(url);
-      }
-      return supabaseResponse;
-    }
-
-    // On any other protected route:
-    if (!isPublicRoute && !isOnboarded) {
-      // No profile row or username is null -> redirect to /onboarding
+    // Send logged-in un-onboarded users strictly to /onboarding
+    if (!isOnboarded && pathname !== '/onboarding') {
       const url = request.nextUrl.clone();
       url.pathname = '/onboarding';
+      return NextResponse.redirect(url);
+    }
+
+    // If on /onboarding but already onboarded, send to /
+    if (pathname === '/onboarding' && isOnboarded) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
       return NextResponse.redirect(url);
     }
   }
@@ -99,10 +124,9 @@ export const config = {
      * Match all request paths except:
      * - _next/static (static files)
      * - _next/image (image optimization files)
-     * - favicon.ico (favicon)
-     * - public asset extensions (svg, png, jpg, etc.)
+     * - favicon.ico (favicon file)
+     * - public files (images, icons, etc.)
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
-

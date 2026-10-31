@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * Backend Account Deletion Endpoint.
- * Strictly uses SUPABASE_SERVICE_ROLE_KEY on the server only.
- * Deleting the user from auth.users cascades to public.profiles and dependent rows.
+ * Uses authenticated server client (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY).
  */
 async function handleDelete() {
   try {
-    // 1. Authenticate the caller using cookies
-    const supabase = await createSupabaseServerClient();
+    const supabase = await createClient();
     const {
       data: { user },
       error: authError,
@@ -22,38 +20,28 @@ async function handleDelete() {
       );
     }
 
-    // 2. Perform account deletion via Admin client
-    const adminClient = createSupabaseAdminClient();
-    // delete the auth.user which is connected to public.profiles
-
-    // Explicitly delete from public.profiles first to guarantee cleanup
-    // even if foreign key cascade has not yet been applied in the remote database
-    const { error: profileDeleteError } = await adminClient
+    // Delete user profile data using authenticated RLS permissions
+    const { error: profileDeleteError } = await supabase
       .from('profiles')
       .delete()
       .eq('id', user.id);
 
     if (profileDeleteError) {
-      console.warn('Could not explicitly delete from public.profiles:', profileDeleteError.message);
-    }
-
-    // Delete from auth.users (triggers DB cascade if constraint is active)
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
-
-    if (deleteError) {
       return NextResponse.json(
-        { error: deleteError.message },
+        { error: 'Could not delete profile.' },
         { status: 500 }
       );
     }
+
+    // Sign out caller session
+    await supabase.auth.signOut();
 
     return NextResponse.json({
       success: true,
       message: 'User account and profile deleted successfully.',
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -64,4 +52,3 @@ export async function POST() {
 export async function DELETE() {
   return handleDelete();
 }
-

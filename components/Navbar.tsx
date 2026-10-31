@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
+  const { user, signOut } = useAuth();
+
   return (
     <nav className={styles.nav} id="navbar">
       <div className={styles.inner}>
@@ -27,17 +30,34 @@ export default function Navbar() {
           <li>
             <a href="#trust">Trust</a>
           </li>
-          <li>
-            <Link href="/login" className={styles.loginLink}>
-              Log in
-            </Link>
-          </li>
+          {!user && (
+            <li>
+              <Link href="/login" className={styles.loginLink}>
+                Log in
+              </Link>
+            </li>
+          )}
         </ul>
 
-        <Link href="/signup" className={`btn-primary ${styles.ctaBtn}`}>
-          Get Started
-          <span aria-hidden="true">→</span>
-        </Link>
+        {user ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link href="/home" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
+              Home
+            </Link>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className={styles.logoutBtn}
+            >
+              Log out
+            </button>
+          </div>
+        ) : (
+          <Link href="/signup" className={`btn-primary ${styles.ctaBtn}`}>
+            Get Started
+            <span aria-hidden="true">→</span>
+          </Link>
+        )}
       </div>
     </nav>
   );

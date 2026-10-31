@@ -22,8 +22,8 @@
 -- ------------------------------------------------------------------------------
 -- Each row represents a human member of Plus1.
 -- 'id': Matches the Supabase Auth user ID (UUID).
--- 'username': Display name (e.g., 'Hasan Kabir').
--- 'handle': Unique handle for @mentions and profile URLs (e.g., 'hasan').
+-- 'username': Unique handle for @mentions and profile URLs (e.g., 'hasankabir23').
+-- 'profilename': Display name shown at the top of the profile (e.g., 'Hasan Kabir').
 -- 'bio': Short introduction about the member.
 -- 'looking_for': Array of interest tags (e.g., ['teammates', 'hackathon']).
 -- ------------------------------------------------------------------------------
@@ -31,7 +31,6 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique check (username is null or (username = lower(username) and username ~ '^[a-z0-9_]{3,20}$')),
   profilename text,
-  handle text unique,
   bio text default '',
   looking_for text[] default '{}',
   created_at timestamptz not null default now()
@@ -120,6 +119,8 @@ create table if not exists public.inbox_items (
   status text not null default 'unread' check (status in ('unread', 'read', 'dismissed')),
   created_at timestamptz not null default now()
 );
+
+
 
 
 -- ==============================================================================
@@ -267,18 +268,25 @@ create policy "Owners have full access to their inbox items"
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
-security definer
-set search_path = ''
+security definer -- will give access of the admin to the user
+set search_path = public, auth, pg_temp
 as $$
 begin
-  insert into public.profiles (id)
-  values (new.id)
-  on conflict (id) do nothing;
+  insert into public.profiles (id, username, profilename)
+  values (
+    new.id,
+    nullif(trim(new.raw_user_meta_data->>'username'), ''),
+    nullif(trim(coalesce(new.raw_user_meta_data->>'profilename', new.raw_user_meta_data->>'name')), '')
+  )
+  on conflict (id) do update set
+    username = coalesce(public.profiles.username, excluded.username),
+    profilename = coalesce(public.profiles.profilename, excluded.profilename);
   return new;
 end;
 $$;
 
 -- Connect the function to the auth.users table on every new signup
+-- we are telling server to drop the old automation if any exists
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users

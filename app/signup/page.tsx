@@ -2,50 +2,40 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function SignupPage() {
-  const router = useRouter();
   const { signUp } = useAuth();
-  const [username, setUsername] = useState('');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setConfirmationNotice(null);
-    if (!username || !email || !password) {
-      setError('Please fill in your username, email, and password.');
+
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
+      setError('Please fill in both email and password.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const res = await signUp(email, password, username);
-      if (res?.requiresEmailConfirmation) {
-        setConfirmationNotice(
-          `Account created for ${email}! A confirmation link has been sent to your inbox. Please verify your email, then log in.`
-        );
-      }
-    } catch (err: unknown) {
-      let message = 'Could not create account.';
-      if (err instanceof Error) {
-        message = err.message;
-      } else if (typeof err === 'object' && err !== null && 'message' in err) {
-        message = String((err as any).message);
-      }
-      setError(message);
+      await signUp(cleanEmail, password);
+      // On success, AuthProvider redirects directly to /onboarding
+    } catch {
+      setError('Invalid email or password');
     } finally {
       setIsSubmitting(false);
     }
@@ -54,6 +44,7 @@ export default function SignupPage() {
   return (
     <div className="auth-wrapper">
       <div className="auth-card">
+        {/* Brand Header */}
         <div style={{ marginBottom: '28px' }}>
           <Link
             href="/"
@@ -84,6 +75,7 @@ export default function SignupPage() {
               JOIN
             </span>
           </Link>
+
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--ink)', marginBottom: '8px' }}>
             Create your account
           </h1>
@@ -91,40 +83,6 @@ export default function SignupPage() {
             Join the human + agent social network. Shape an agent that works for you.
           </p>
         </div>
-
-        {confirmationNotice ? (
-          <div
-            style={{
-              padding: '16px 18px',
-              backgroundColor: 'var(--surface-soft)',
-              border: '1px solid var(--agent)',
-              borderRadius: 'var(--radius-sm)',
-              marginBottom: '24px',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--ink)', marginBottom: '8px', fontSize: '16px' }}>
-              Check your email
-            </div>
-            <div style={{ fontSize: '14px', color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: '16px' }}>
-              {confirmationNotice}
-            </div>
-            <Link
-              href="/login"
-              style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                backgroundColor: 'var(--human)',
-                color: '#FFFFFF',
-                fontSize: '13px',
-                fontWeight: 600,
-                borderRadius: 'var(--radius-sm)',
-                textDecoration: 'none',
-              }}
-            >
-              Go to Log in &rarr;
-            </Link>
-          </div>
-        ) : null}
 
         {error && (
           <div
@@ -145,33 +103,6 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
             <label
-              htmlFor="username"
-              style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
-            >
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. hasankabir"
-              required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--line)',
-                backgroundColor: 'var(--surface)',
-                fontSize: '15px',
-                color: 'var(--ink)',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          <div>
-            <label
               htmlFor="email"
               style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
             >
@@ -182,7 +113,7 @@ export default function SignupPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="hasan@example.com"
+              placeholder="you@example.com"
               required
               style={{
                 width: '100%',
@@ -202,7 +133,7 @@ export default function SignupPage() {
               htmlFor="password"
               style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}
             >
-              Password
+              Password (min 8 characters)
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -210,8 +141,9 @@ export default function SignupPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
+                placeholder="••••••••"
                 required
+                minLength={8}
                 style={{
                   width: '100%',
                   padding: '10px 40px 10px 12px',
