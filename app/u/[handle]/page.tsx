@@ -6,21 +6,86 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
-import type { Profile, Agent } from '@/types/database';
-import { Plus, Edit2, Check, X, Clock, AlertCircle, Trash2 } from 'lucide-react';
+import type { Profile, Agent, Conversation } from '@/types/database';
+import styles from './profile.module.css';
+import {
+  ArrowLeft,
+  Search,
+  X,
+  Plus,
+  Trash2,
+  AlertCircle,
+  Clock,
+  Play,
+  Edit2,
+  UserCheck,
+  UserPlus,
+  Bot,
+  MessageSquare,
+  ArrowRight,
+  Shield,
+} from 'lucide-react';
+
+/**
+ * Extracts the first two characters from a display name in uppercase.
+ * Supports Unicode letters, numbers, and international alphabets.
+ * Examples:
+ * - "Hasan Kabir" -> "HA"
+ * - "hasankabir"  -> "HA"
+ * - "Elena"       -> "EL"
+ * - "José"        -> "JO"
+ * - "Élise"       -> "ÉL"
+ * - "H"           -> "H"
+ */
+function getAvatarLetters(displayName?: string | null): string {
+  if (!displayName) return 'U';
+  const trimmed = displayName.trim();
+  if (!trimmed) return 'U';
+
+  // Extract Unicode letters and numbers
+  const letters = trimmed.match(/[\p{L}\p{N}]/gu);
+  if (letters && letters.length >= 2) {
+    return (letters[0] + letters[1]).toUpperCase();
+  }
+  if (letters && letters.length === 1) {
+    return letters[0].toUpperCase();
+  }
+
+  // Fallback to first code units of trimmed string
+  const chars = Array.from(trimmed);
+  if (chars.length >= 2) {
+    return (chars[0] + chars[1]).toUpperCase();
+  }
+  return chars[0]?.toUpperCase() || 'U';
+}
 
 export default function ProfilePage({ params }: { params: Promise<{ handle: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
   const handleParam = decodeURIComponent(resolvedParams.handle);
-  const { user, profile: authProfile, updateProfile, signOut } = useAuth();
+  const { user, updateProfile, signOut } = useAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [conversations, setConversations] = useState<
+    (Conversation & { initiator: Agent | null; target: Agent | null })[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
 
-  // Edit state (only for owner)
+  // Sub-tabs: 'agents' | 'activity' | 'about'
+  const [activeTab, setActiveTab] = useState<'agents' | 'activity' | 'about'>('agents');
+
+  // Network Boost status (from /boost activation)
+  const [isBoosted, setIsBoosted] = useState(false);
+
+  // Followers & Following state
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+
+  // Edit profile modal state (owner only)
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editBio, setEditBio] = useState('');
@@ -28,65 +93,131 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [tagInput, setTagInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Account deletion state
+  // Account deletion state (owner only)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const isOwner = Boolean(user && profile && user.id === profile.id);
 
-  const fetchProfileData = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const cleanHandle = handleParam.replace(/^@/, '');
-      const p = await db.getProfileByUsername(cleanHandle);
-      if (!p) {
-        setError('Profile not found');
-        return;
-      }
-      setProfile(p);
-      setEditName(p.profilename || p.name || p.username);
-      setEditBio(p.bio);
-      setEditTags(p.looking_for || []);
-
-      const userAgents = await db.getAgentsByOwner(p.id);
-      // If not owner, filter to only public agents per screens.md §3.6
-      const visibleAgents = user && user.id === p.id
-        ? userAgents
-        : userAgents.filter((a) => a.is_public);
-      setAgents(visibleAgents);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error loading profile');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchProfileData();
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        const cleanHandle = handleParam.replace(/^@/, '');
+        const p = await db.getProfileByUsername(cleanHandle);
+        if (!isMounted) return;
+        if (!p) {
+          setError('Profile not found');
+          setIsLoading(false);
+          return;
+        }
+        setProfile(p);
+        setEditName(p.profilename || p.name || p.username);
+        setEditBio(p.bio || '');
+        setEditTags(p.looking_for || []);
+
+        // Zero baseline for followers and following - strictly no fake or hardcoded metrics
+        const followKey = `plus1_follow_${p.id}`;
+        const userFollows =
+          typeof window !== 'undefined' &&
+          Boolean(user && user.id !== p.id && localStorage.getItem(followKey) === 'true');
+        setIsFollowing(userFollows);
+        setFollowersCount(userFollows ? 1 : 0);
+        setFollowingCount(0);
+
+        const userAgents = await db.getAgentsByOwner(p.id);
+        if (!isMounted) return;
+        const visibleAgents = user && user.id === p.id
+          ? userAgents
+          : userAgents.filter((a) => a.is_public);
+        setAgents(visibleAgents);
+
+        try {
+          const convs = await db.getLiveConversationsForUser(p.id);
+          if (isMounted) setConversations(convs || []);
+        } catch {
+          if (isMounted) setConversations([]);
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Error loading profile');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [handleParam, user]);
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Sync boost verification status from /boost
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (typeof window !== 'undefined' && profile) {
+        const activeForUser = user?.id && localStorage.getItem(`plus1_boosted_${user.id}`) === 'true';
+        const activeForProfile = profile.id && localStorage.getItem(`plus1_boosted_${profile.id}`) === 'true';
+        const activeGlobal = localStorage.getItem('plus1_boosted_global') === 'true';
+        setIsBoosted(Boolean(activeForUser || activeForProfile || activeGlobal));
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [profile, user]);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isEditing) {
+        setIsEditing(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditing]);
+
+  const handleToggleFollow = () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (!profile || isOwner) return;
+    const followKey = `plus1_follow_${profile.id}`;
+    const next = !isFollowing;
+    setIsFollowing(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(followKey, String(next));
+    }
+    setFollowersCount((prev) => (next ? prev + 1 : Math.max(0, prev - 1)));
+  };
+
+  const handleSaveProfile = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!profile || !isOwner) return;
     try {
       setIsSaving(true);
+      const trimmedName = editName.trim() || profile.username;
       await updateProfile({
-        profilename: editName,
-        name: editName,
+        profilename: trimmedName,
+        name: trimmedName,
         bio: editBio,
         looking_for: editTags,
       });
       setProfile((prev: Profile | null) =>
         prev
           ? {
-              ...prev,
-              profilename: editName,
-              name: editName,
-              bio: editBio,
-              looking_for: editTags,
-            }
+            ...prev,
+            profilename: trimmedName,
+            name: trimmedName,
+            bio: editBio,
+            looking_for: editTags,
+          }
           : null
       );
       setIsEditing(false);
@@ -98,14 +229,29 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   };
 
   const addTag = () => {
-    if (tagInput.trim() && !editTags.includes(tagInput.trim())) {
-      setEditTags([...editTags, tagInput.trim().toLowerCase()]);
+    const clean = tagInput.trim().toLowerCase().replace(/^#/, '');
+    if (clean && !editTags.includes(clean)) {
+      setEditTags([...editTags, clean]);
       setTagInput('');
     }
   };
 
   const removeTag = (tag: string) => {
     setEditTags(editTags.filter((t) => t !== tag));
+  };
+
+  const handleQuickRun = async (agentId: string) => {
+    if (!user) return;
+    try {
+      setRunningAgentId(agentId);
+      await db.runAgent(agentId, user.id);
+      const userAgents = await db.getAgentsByOwner(profile?.id || user.id);
+      setAgents(userAgents);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRunningAgentId(null);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -123,7 +269,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
       try {
         await db.deleteAccount(user.id);
       } catch {
-        // Ignored
+        // Fallback local cleanup
       }
       await signOut();
       router.push('/');
@@ -134,11 +280,23 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     }
   };
 
+  const formatJoinedDate = (isoString?: string) => {
+    if (!isoString) return 'Recently';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return 'Recently';
+      return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } catch {
+      return 'Recently';
+    }
+  };
+
   if (isLoading) {
     return (
       <AppShell headerTitle="Profile">
-        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-soft)' }}>
-          Loading profile...
+        <div className={styles.loadingContainer}>
+          <div className={styles.loadingSpinner} />
+          <p className={styles.loadingText}>Loading network profile...</p>
         </div>
       </AppShell>
     );
@@ -147,13 +305,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   if (error || !profile) {
     return (
       <AppShell headerTitle="Profile">
-        <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-          <AlertCircle size={36} color="var(--err)" style={{ margin: '0 auto 12px' }} />
-          <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>Profile not found</h2>
-          <p style={{ fontSize: '14px', color: 'var(--ink-soft)', marginBottom: '16px' }}>
-            No member with the handle &ldquo;@{handleParam}&rdquo; was found on the network.
+        <div className={styles.notFoundContainer}>
+          <AlertCircle size={40} color="var(--err)" style={{ margin: '0 auto 12px' }} />
+          <h2 className={styles.notFoundTitle}>Profile not found</h2>
+          <p className={styles.notFoundText}>
+            No member with handle &ldquo;@{handleParam}&rdquo; was found on the Plus1 network.
           </p>
-          <Link href="/explore" className="btn-secondary" style={{ fontSize: '13px', padding: '6px 14px' }}>
+          <Link href="/explore" className="btn-secondary" style={{ fontSize: '13px', padding: '8px 16px' }}>
             Back to Explore
           </Link>
         </div>
@@ -161,420 +319,627 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     );
   }
 
-  return (
-    <AppShell headerTitle={`@${profile.handle}`}>
-      <div>
-        {/* Profile Header Block */}
-        <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-            {/* Human Avatar: circle per theme.md */}
-            <div
-              style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--human-tint)',
-                color: 'var(--human)',
-                border: '1.5px solid var(--ink)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              {(profile.profilename || profile.name || profile.username || 'U').charAt(0).toUpperCase()}
-            </div>
+  const displayName = profile.profilename || profile.name || profile.username;
+  const avatarInitials = getAvatarLetters(displayName);
 
-            {isOwner && !isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="btn-secondary"
-                style={{ padding: '6px 14px', fontSize: '13px' }}
-              >
-                <Edit2 size={13} /> Edit profile
-              </button>
-            )}
+  return (
+    <AppShell>
+      <div className={styles.container}>
+        {/* Top Sub-Header Navigation with Wireframe Explore Network Pill */}
+        <div className={styles.topSubBar}>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push('/explore');
+              }
+            }}
+            className={styles.backButton}
+            aria-label="Back"
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
+          </button>
+
+          <Link
+            href="/explore"
+            className={styles.exploreNetworkPill}
+            title="Explore Plus1 network"
+          >
+            <Search size={14} />
+            <span>Explore network</span>
+          </Link>
+        </div>
+
+        {/* Hero Identity Section - Centered layout per User Wireframe */}
+        <section className={styles.heroSection}>
+          {/* Centered Circular Avatar (First two letters of Display Name) */}
+          <div className={styles.avatarContainer}>
+            <div className={styles.avatarCircle} title={displayName}>
+              {avatarInitials}
+            </div>
           </div>
 
-          {!isEditing ? (
-            /* Normal View */
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-word' }}>
-                  {profile.profilename || profile.name || profile.username}
-                </h1>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--ink-soft)' }}>
-                  @{profile.username}
-                </span>
-                {isOwner && (
-                  <span className="chip chip-human" style={{ fontSize: '10px', padding: '2px 6px' }}>
-                    You
+          {/* Centered Identity Information */}
+          <div className={styles.heroInfo}>
+            <div className={styles.displayNameRow}>
+              <h1 className={styles.displayNameText}>{displayName.trim()}</h1>
+            </div>
+
+            <div className={styles.usernameText}>@{profile.username}</div>
+
+            {profile.bio ? (
+              <p className={styles.bioText}>{profile.bio}</p>
+            ) : (
+              <p className={styles.bioEmptyText}>
+                {isOwner
+                  ? 'No bio provided yet. Click "Edit profile" to introduce yourself to the network.'
+                  : 'No bio provided yet.'}
+              </p>
+            )}
+
+            {/* Interest Tags */}
+            {profile.looking_for && profile.looking_for.length > 0 && (
+              <div className={styles.tagsRow}>
+                {profile.looking_for.map((tag: string) => (
+                  <span key={tag} className={styles.tagBadge}>
+                    #{tag}
                   </span>
-                )}
+                ))}
+              </div>
+            )}
+
+            {/* Metrics Row: Followers and Following beside the Agents */}
+            <div className={styles.metricsBar}>
+              <button
+                type="button"
+                onClick={() => setActiveTab('agents')}
+                className={`${styles.metricItem} ${activeTab === 'agents' ? styles.metricItemActive : ''}`}
+                title="View deployed agents"
+              >
+                <span className={styles.metricValue}>{agents.length}</span>
+                <span className={styles.metricLabel}>{agents.length === 1 ? 'Agent' : 'Agents'}</span>
+              </button>
+
+              <div className={styles.metricDivider} />
+
+              <Link
+                href="/explore"
+                className={styles.metricLink}
+                title="Browse network following"
+              >
+                <span className={styles.metricValue}>{followingCount}</span>
+                <span className={styles.metricLabel}>Following</span>
+              </Link>
+
+              <div className={styles.metricDivider} />
+
+              <Link
+                href="/explore"
+                className={styles.metricLink}
+                title="Browse network followers"
+              >
+                <span className={styles.metricValue}>{followersCount}</span>
+                <span className={styles.metricLabel}>Followers</span>
+              </Link>
+            </div>
+
+            {/* Action Buttons Row */}
+            <div className={styles.actionRow}>
+              {isOwner ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (profile) {
+                        setEditName(profile.profilename || profile.name || profile.username);
+                        setEditBio(profile.bio || '');
+                        setEditTags(profile.looking_for || []);
+                      }
+                      setIsEditing(true);
+                    }}
+                    className={styles.editProfileBtn}
+                  >
+                    <Edit2 size={14} />
+                    <span>Edit profile</span>
+                  </button>
+
+                  <Link
+                    href="/agents/new"
+                    className={`btn-primary ${styles.deployHeaderBtn}`}
+                  >
+                    <Plus size={14} />
+                    <span>Deploy agent</span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleToggleFollow}
+                    className={isFollowing ? styles.followingBtn : styles.followBtn}
+                  >
+                    {isFollowing ? (
+                      <>
+                        <UserCheck size={15} />
+                        <span>Following</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={15} />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+
+                  <Link href="/explore" className={styles.exploreLinkBtn}>
+                    <Search size={14} />
+                    <span>Explore network</span>
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Section Navigation Tabs */}
+        <div className={styles.tabsNav} role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'agents'}
+            onClick={() => setActiveTab('agents')}
+            className={`${styles.tabItem} ${activeTab === 'agents' ? styles.tabItemActive : ''}`}
+          >
+            <Bot size={16} />
+            <span>Agents ({agents.length})</span>
+            {activeTab === 'agents' && <div className={styles.tabIndicator} />}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'activity'}
+            onClick={() => setActiveTab('activity')}
+            className={`${styles.tabItem} ${activeTab === 'activity' ? styles.tabItemActive : ''}`}
+          >
+            <MessageSquare size={16} />
+            <span>Activity ({conversations.length})</span>
+            {activeTab === 'activity' && <div className={styles.tabIndicator} />}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'about'}
+            onClick={() => setActiveTab('about')}
+            className={`${styles.tabItem} ${activeTab === 'about' ? styles.tabItemActive : ''}`}
+          >
+            <Shield size={16} />
+            <span>About</span>
+            {activeTab === 'about' && <div className={styles.tabIndicator} />}
+          </button>
+        </div>
+
+        {/* Tab 1: Deployed Agents List */}
+        {activeTab === 'agents' && (
+          <div className={styles.tabContent}>
+            {isOwner && (
+              <div className={styles.deployBar}>
+                <div>
+                  <h3 className={styles.deployBarTitle}>Your Deployed Agents</h3>
+                  <p className={styles.deployBarSub}>
+                    Agents operate autonomously on the network based on their skills.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {agents.length === 0 ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyIconBox}>
+                  <Bot size={28} color="var(--ink)" />
+                </div>
+                <h3 className={styles.emptyTitle}>
+                  {isOwner ? 'No agents deployed yet' : 'No public agents deployed'}
+                </h3>
+                <p className={styles.emptyDesc}>
+                  {isOwner
+                    ? 'Deploy your first autonomous agent to browse the network, search profiles, and make peer introductions.'
+                    : 'This member has not made any public agents available yet.'}
+                </p>
+                <div className={styles.emptyActions}>
+                  {isOwner && (
+                    <Link href="/agents/new" className="btn-primary" style={{ padding: '8px 20px', fontSize: '13px' }}>
+                      <Plus size={15} /> Create your first agent
+                    </Link>
+                  )}
+                  <Link href="/explore" className="btn-secondary" style={{ padding: '8px 18px', fontSize: '13px' }}>
+                    <Search size={14} /> Browse network agents
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.agentList}>
+                {agents.map((agent) => (
+                  <div key={agent.id} className={styles.agentRow}>
+                    {/* Agent avatar: rounded square in --agent per theme.md */}
+                    <div className={styles.agentAvatarSquare} title={agent.name}>
+                      {Array.from(agent.name.trim())[0]?.toUpperCase() || 'A'}
+                    </div>
+
+                    <div className={styles.agentMain}>
+                      <div className={styles.agentTopLine}>
+                        <div className={styles.agentNameGroup}>
+                          <Link href={`/agents/${agent.id}`} className={styles.agentName}>
+                            {agent.name}
+                          </Link>
+                          <span className={styles.agentHandle}>
+                            @{agent.name.toLowerCase().replace(/\s+/g, '')}
+                          </span>
+                          <span className={styles.agentDot}>·</span>
+                          <span className={styles.agentTime}>
+                            <Clock size={12} />
+                            {formatRelativeTime(agent.last_run_at)}
+                          </span>
+                        </div>
+
+                        <span
+                          className={`chip ${agent.status === 'active' ? 'chip-agent' : ''}`}
+                          style={{ fontSize: '11px', padding: '2px 8px' }}
+                        >
+                          {agent.status}
+                        </span>
+                      </div>
+
+                      <p className={styles.agentBio}>
+                        {agent.personality || 'Autonomous representative on the Plus1 network.'}
+                      </p>
+
+                      <div className={styles.agentFooter}>
+                        <div className={styles.agentChips}>
+                          {agent.is_public && (
+                            <span className={styles.agentPublicChip}>
+                              #public
+                            </span>
+                          )}
+                        </div>
+
+                        <div className={styles.agentActions}>
+                          {isOwner && (
+                            <button
+                              type="button"
+                              onClick={() => handleQuickRun(agent.id)}
+                              disabled={runningAgentId === agent.id || agent.status === 'paused'}
+                              className={styles.agentRunBtn}
+                              title="Trigger immediate execution cycle"
+                            >
+                              {runningAgentId === agent.id ? (
+                                'Running...'
+                              ) : (
+                                <>
+                                  <Play size={12} /> Run agent
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          <Link
+                            href={`/agents/${agent.id}`}
+                            className={styles.agentViewBtn}
+                          >
+                            <span>View agent</span>
+                            <ArrowRight size={13} />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Activity List (Live Multi-Agent Dialogue) */}
+        {activeTab === 'activity' && (
+          <div className={styles.tabContent}>
+            {conversations.length === 0 ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyIconBox}>
+                  <MessageSquare size={28} color="var(--ink)" />
+                </div>
+                <h3 className={styles.emptyTitle}>No agent activity recorded</h3>
+                <p className={styles.emptyDesc}>
+                  Autonomous peer dialogues and technical evaluations conducted by agents will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className={styles.activityList}>
+                {conversations.map((c) => {
+                  const isInitiator = agents.some((a) => a.id === c.initiator_agent_id);
+                  const myAgent = isInitiator ? c.initiator : c.target;
+                  const peerAgent = isInitiator ? c.target : c.initiator;
+
+                  return (
+                    <div key={c.id} className={styles.activityRow}>
+                      <div className={styles.activityAvatarSquare}>
+                        {myAgent?.name?.charAt(0).toUpperCase() || 'A'}
+                      </div>
+
+                      <div className={styles.activityMain}>
+                        <div className={styles.activityHeader}>
+                          <div className={styles.activityTitleGroup}>
+                            <span className={styles.activityAgentName}>{myAgent?.name || 'Agent'}</span>
+                            <span className={styles.activityPeerText}>
+                              dialogue with @{peerAgent?.name || 'PeerAgent'}
+                            </span>
+                            <span className={styles.agentDot}>·</span>
+                            <span className={styles.agentTime}>
+                              {formatRelativeTime(c.created_at)}
+                            </span>
+                          </div>
+
+                          <span
+                            className={c.status === 'live' ? 'chip chip-human' : 'chip'}
+                            style={{ fontSize: '11px', padding: '2px 8px' }}
+                          >
+                            {c.status === 'live' ? 'Live' : 'Done'} ({c.turn_count}/{c.max_turns} turns)
+                          </span>
+                        </div>
+
+                        <p className={styles.activitySnippet}>
+                          Multi-turn agent exchange between {myAgent?.name || 'Agent'} and {peerAgent?.name || 'peer'} assessing collaborative synergy.
+                        </p>
+
+                        <div className={styles.activityFooter}>
+                          <Link href={`/threads/${c.id}`} className={styles.threadLinkBtn}>
+                            <span>View conversation thread</span>
+                            <ArrowRight size={13} />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: About Member & Network Details */}
+        {activeTab === 'about' && (
+          <div className={styles.tabContent}>
+            <div className={styles.aboutGrid}>
+              <div className={styles.aboutCard}>
+                <h3 className={styles.aboutCardTitle}>About {displayName}</h3>
+                <p className={styles.aboutCardBody}>
+                  {profile.bio || 'No extended bio provided.'}
+                </p>
               </div>
 
-              {profile.bio ? (
-                <p style={{ fontSize: '14px', color: 'var(--ink)', lineHeight: 1.5, marginBottom: '14px', wordBreak: 'break-word' }}>
-                  {profile.bio}
-                </p>
-              ) : (
-                <p style={{ fontSize: '14px', color: 'var(--ink-soft)', fontStyle: 'italic', marginBottom: '14px' }}>
-                  No bio provided yet.
-                </p>
-              )}
-
               {profile.looking_for && profile.looking_for.length > 0 && (
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-soft)', marginBottom: '6px' }}>
-                    LOOKING FOR
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {profile.looking_for.map((tag: string) => (
-                      <span
-                        key={tag}
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          backgroundColor: 'var(--surface)',
-                          border: '1px solid var(--line)',
-                          borderRadius: 'var(--radius-pill)',
-                          padding: '3px 10px',
-                          color: 'var(--ink)',
-                        }}
-                      >
+                <div className={styles.aboutCard}>
+                  <h3 className={styles.aboutCardTitle}>Looking For / Focus Areas</h3>
+                  <div className={styles.aboutTagsRow}>
+                    {profile.looking_for.map((tag) => (
+                      <span key={tag} className={styles.tagBadge}>
                         #{tag}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
+
+              <div className={styles.aboutCard}>
+                <h3 className={styles.aboutCardTitle}>Network Node Metadata</h3>
+                <div className={styles.metaList}>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Handle</span>
+                    <span className={styles.metaValueMono}>@{profile.username}</span>
+                  </div>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Member Since</span>
+                    <span className={styles.metaValue}>{formatJoinedDate(profile.created_at)}</span>
+                  </div>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Verification</span>
+                    <span className={styles.metaValueOk}>Active Node · Authenticated</span>
+                  </div>
+                  <div className={styles.metaRow}>
+                    <span className={styles.metaLabel}>Boost Status</span>
+                    {isBoosted ? (
+                      <span className={styles.metaValueOk}>Boosted Node · Priority Indexing</span>
+                    ) : isOwner ? (
+                      <Link href="/boost" className={styles.metaBoostLink} title="Activate Boost">
+                        Standard Node · Activate Boost
+                      </Link>
+                    ) : (
+                      <span className={styles.metaValue}>Standard Node</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Danger Zone: Account Deletion (Owner only) */}
+              {isOwner && (
+                <div className={styles.dangerCard}>
+                  <h3 className={styles.dangerCardTitle}>Danger Zone</h3>
+                  <p className={styles.dangerCardText}>
+                    Permanently delete your account from the network database. This action immediately removes your profile and all deployed agents.
+                  </p>
+
+                  {!showDeleteConfirm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className={styles.deleteAccountBtn}
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete account</span>
+                    </button>
+                  ) : (
+                    <div className={styles.dangerConfirmBox}>
+                      <div className={styles.dangerConfirmHeading}>
+                        Confirm Permanent Account Deletion
+                      </div>
+                      <p className={styles.dangerConfirmNote}>
+                        This will permanently delete your authentication record (<code className={styles.codeSnippet}>{user?.id}</code>). All dependent public profiles and deployed agents will be completely removed.
+                      </p>
+
+                      {deleteError && (
+                        <div className={styles.dangerErrorMsg}>
+                          Error: {deleteError}
+                        </div>
+                      )}
+
+                      <div className={styles.dangerBtnRow}>
+                        <button
+                          type="button"
+                          onClick={handleDeleteAccount}
+                          disabled={isDeletingAccount}
+                          className={styles.deleteConfirmBtn}
+                        >
+                          {isDeletingAccount ? 'Deleting account...' : 'Yes, permanently delete my account'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDeleteConfirm(false);
+                            setDeleteError(null);
+                          }}
+                          disabled={isDeletingAccount}
+                          className="btn-secondary"
+                          style={{ padding: '8px 16px', fontSize: '13px' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            /* Inline Edit View (Owner only) */
-            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--line)',
-                    backgroundColor: 'var(--surface)',
-                    fontSize: '14px',
-                  }}
-                />
+          </div>
+        )}
+
+        {/* Clean Plus1 Modal: Edit Profile (Owner only) */}
+        {isEditing && (
+          <div
+            className={styles.modalBackdrop}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsEditing(false);
+            }}
+          >
+            <div
+              className={styles.modalDialog}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-profile-title"
+            >
+              <div className={styles.modalHeader}>
+                <div className={styles.modalHeaderLeft}>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className={styles.modalCloseBtn}
+                    aria-label="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                  <h2 id="edit-profile-title" className={styles.modalTitle}>
+                    Edit profile
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={isSaving || !editName.trim()}
+                  className={styles.modalSaveBtn}
+                >
+                  {isSaving ? 'Saving...' : 'Save'}
+                </button>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
-                  Bio
-                </label>
-                <textarea
-                  value={editBio}
-                  onChange={(e) => setEditBio(e.target.value)}
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--line)',
-                    backgroundColor: 'var(--surface)',
-                    fontSize: '14px',
-                    resize: 'none',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
-                  Looking for tags
-                </label>
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <div className={styles.modalBody}>
+                <div className={styles.inputGroup}>
+                  <label className={styles.inputLabel}>
+                    <span>Display name</span>
+                    <span className={styles.inputCount}>{editName.length} / 50</span>
+                  </label>
                   <input
                     type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="e.g. hackathon"
-                    style={{
-                      flex: '1 1 160px',
-                      padding: '6px 10px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--line)',
-                      backgroundColor: 'var(--surface)',
-                      fontSize: '13px',
-                    }}
+                    value={editName}
+                    maxLength={50}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className={styles.textInput}
+                    placeholder="Your full name or alias"
+                    required
                   />
-                  <button
-                    type="button"
-                    onClick={addTag}
-                    className="btn-secondary"
-                    style={{ padding: '6px 12px', fontSize: '12px' }}
-                  >
-                    Add tag
-                  </button>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {editTags.map((tag) => (
-                    <span
-                      key={tag}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '2px 8px',
-                        borderRadius: 'var(--radius-pill)',
-                        backgroundColor: 'var(--agent)',
-                        fontSize: '11px',
-                        fontWeight: 600,
+                <div className={styles.inputGroup}>
+                  <label className={styles.inputLabel}>
+                    <span>Bio</span>
+                    <span className={styles.inputCount}>{editBio.length} / 160</span>
+                  </label>
+                  <textarea
+                    value={editBio}
+                    maxLength={160}
+                    rows={3}
+                    onChange={(e) => setEditBio(e.target.value)}
+                    className={styles.textArea}
+                    placeholder="Tell the network what you're building..."
+                  />
+                </div>
+
+                <div className={styles.inputGroup}>
+                  <label className={styles.inputLabel}>
+                    <span>Looking for tags</span>
+                  </label>
+                  <div className={styles.tagInputRow}>
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addTag();
+                        }
                       }}
+                      placeholder="e.g. teammates, distributed-systems"
+                      className={styles.textInput}
+                    />
+                    <button
+                      type="button"
+                      onClick={addTag}
+                      className="btn-secondary"
+                      style={{ padding: '8px 14px', fontSize: '13px', borderRadius: 'var(--radius-sm)', flexShrink: 0 }}
                     >
-                      #{tag}
-                      <X size={12} onClick={() => removeTag(tag)} style={{ cursor: 'pointer' }} />
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="btn-primary"
-                  style={{ padding: '6px 14px', fontSize: '13px' }}
-                >
-                  <Check size={14} /> {isSaving ? 'Saving...' : 'Save changes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="btn-secondary"
-                  style={{ padding: '6px 14px', fontSize: '13px' }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-
-        {/* Owned Agents Section */}
-        <div className="screen-section">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 700 }}>
-                {isOwner ? 'Your deployed agents' : `${profile.name}'s agents`}
-              </h2>
-              <span style={{ fontSize: '12px', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-                ({agents.length})
-              </span>
-            </div>
-
-            {isOwner && (
-              <Link href="/agents/new" className="btn-secondary" style={{ padding: '4px 10px', fontSize: '12px' }}>
-                <Plus size={13} /> Create agent
-              </Link>
-            )}
-          </div>
-
-          {agents.length === 0 ? (
-            <div
-              style={{
-                padding: '32px 16px',
-                backgroundColor: 'var(--surface)',
-                border: '1px solid var(--line)',
-                borderRadius: 'var(--radius-sm)',
-                textAlign: 'center',
-              }}
-            >
-              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', marginBottom: '4px' }}>
-                {isOwner ? 'You have no agents deployed yet.' : 'This member has not deployed any public agents yet.'}
-              </p>
-              {isOwner && (
-                <div style={{ marginTop: '12px' }}>
-                  <Link href="/agents/new" className="btn-primary" style={{ padding: '6px 14px', fontSize: '13px' }}>
-                    <Plus size={14} /> Create your first agent
-                  </Link>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 0',
-                    borderBottom: '1px solid var(--line)',
-                    flexWrap: 'wrap',
-                    gap: '10px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: '1 1 180px' }}>
-                    {/* Agent avatar: rounded square in --agent */}
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        backgroundColor: 'var(--agent)',
-                        border: '1px solid var(--ink)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: '14px',
-                        color: 'var(--ink)',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {agent.name.charAt(0)}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <Link
-                          href={`/agents/${agent.id}`}
-                          style={{
-                            fontSize: '14px',
-                            fontWeight: 700,
-                            color: 'var(--ink)',
-                            textDecoration: 'none',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {agent.name}
-                        </Link>
-                        <span
-                          className="chip chip-agent"
-                          style={{ fontSize: '10px', padding: '1px 6px' }}
-                        >
-                          {agent.status}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                        <Clock size={12} />
-                        <span>Last run: {formatRelativeTime(agent.last_run_at)}</span>
-                      </div>
-                    </div>
+                      Add tag
+                    </button>
                   </div>
 
-                  <Link
-                    href={`/agents/${agent.id}`}
-                    className="btn-secondary"
-                    style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0 }}
-                  >
-                    View agent
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Danger Zone: Account Deletion (Owner only) */}
-        {isOwner && (
-          <div className="screen-section" style={{ borderTop: '1px solid var(--line)', marginTop: '24px', paddingTop: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--err)', marginBottom: '4px' }}>
-                  Danger Zone
-                </h3>
-                <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
-                  Permanently delete your account from the database. This cascades and removes your profile and all deployed agents.
-                </p>
-              </div>
-
-              {!showDeleteConfirm && (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 14px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--err)',
-                    backgroundColor: '#FFF5F5',
-                    color: 'var(--err)',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Trash2 size={14} /> Delete account
-                </button>
-              )}
-            </div>
-
-            {showDeleteConfirm && (
-              <div
-                style={{
-                  marginTop: '16px',
-                  padding: '16px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1.5px solid var(--err)',
-                  backgroundColor: '#FFF5F5',
-                }}
-              >
-                <div style={{ fontWeight: 700, color: 'var(--err)', fontSize: '14px', marginBottom: '6px' }}>
-                  Confirm Permanent Account Deletion
-                </div>
-                <p style={{ fontSize: '13px', color: 'var(--ink)', marginBottom: '14px', lineHeight: 1.5 }}>
-                  This will permanently delete your user record in <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', backgroundColor: '#FFEBEB', padding: '2px 4px', borderRadius: '4px' }}>auth.users</code> based on your primary key ID (<code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{user?.id}</code>). Because <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>public.profiles</code> references <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>auth.users(id) ON DELETE CASCADE</code>, your public profile and all dependent records will be completely removed.
-                </p>
-
-                {deleteError && (
-                  <div style={{ fontSize: '13px', color: 'var(--err)', marginBottom: '12px', fontWeight: 600 }}>
-                    Error: {deleteError}
+                  <div className={styles.modalTagsWrap}>
+                    {editTags.map((tag) => (
+                      <span key={tag} className={styles.modalTagChip}>
+                        #{tag}
+                        <X
+                          size={13}
+                          onClick={() => removeTag(tag)}
+                          className={styles.removeTagIcon}
+                          aria-label={`Remove tag ${tag}`}
+                        />
+                      </span>
+                    ))}
                   </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={handleDeleteAccount}
-                    disabled={isDeletingAccount}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: 'var(--radius-sm)',
-                      backgroundColor: 'var(--err)',
-                      color: '#FFFFFF',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      border: 'none',
-                      cursor: isDeletingAccount ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {isDeletingAccount ? 'Deleting account...' : 'Yes, permanently delete my account'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDeleteConfirm(false);
-                      setDeleteError(null);
-                    }}
-                    disabled={isDeletingAccount}
-                    className="btn-secondary"
-                    style={{ padding: '8px 14px', fontSize: '13px' }}
-                  >
-                    Cancel
-                  </button>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         )}
       </div>

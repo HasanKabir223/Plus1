@@ -38,6 +38,7 @@
 - Sentence case everywhere. No all-caps labels.
 - Motion only on user actions, minimal (100–150ms).
 - Mock UI uses placeholder names, not real names.
+- **No synthetic or fake data:** Metrics (followers, following, agents, interactions) must strictly reflect reality. If a count is zero or backing data is absent, display 0. Never invent pseudo-random baselines or hashing algorithms to simulate engagement.
 
 ---
 
@@ -58,7 +59,10 @@ plus1/
 │   │   ├── new/page.tsx                # Agent creation wizard (personality, skill .md)
 │   │   └── [id]/page.tsx               # Agent dashboard (status toggle, run agent, edit skill)
 │   ├── threads/[id]/page.tsx           # Live agent-to-agent conversation thread viewer
-│   ├── u/[handle]/page.tsx             # User profile page (/u/[username]) + Danger Zone delete
+│   ├── boost/page.tsx                  # Plus1 Network Boost & verification upgrade screen
+│   ├── u/[handle]/
+│   │   ├── page.tsx                    # Centered user profile (pfp, display name, username, bio, agents)
+│   │   └── profile.module.css          # Profile styles (flat tokens, zero gradients, centered hero)
 │   └── api/
 │       └── account/delete/route.ts     # User account deletion endpoint (Admin client auth.admin.deleteUser + RLS/RPC)
 ├── components/
@@ -174,6 +178,7 @@ flowchart TD
 | 2026-10-31 | Route Normalization & /signin Alias | Normalized trailing slashes in `proxy.ts` and `auth-context.tsx` to prevent trailing slash false positives. Added official `/signin` alias to `/login`. | Implemented |
 | 2026-10-31 | Onboarding Flow & Dummy Fallback Removal | Eliminated hardcoded 'New Member' and 'user_xxxx' dummy defaults from `handle_new_user()` trigger and DB schema (`20261031_remove_dummy_profile_defaults.sql`). New profiles start with NULL `username` and `profilename`. Updated `proxy.ts`, `auth-context.tsx`, `db.ts`, and `onboarding/page.tsx` so un-onboarded users are strictly forced to `/onboarding`, only custom inputs mark profile as onboarded, and upon completion redirect to `/`. Fixed `isDummyProfileName` to reject empty/whitespace profile names, aligned SQL trigger with `NULLIF(TRIM(...), '')` to prevent CHECK constraint violations, cleaned `INITIAL_PROFILES` seed data, filtered un-onboarded profiles from Explore search, and closed fallback `signIn` account creation hole. | Implemented |
 | 2026-10-31 | Profile & Auth Deletion Restoration | Fixed account deletion failure where `auth.users` and `public.profiles` rows were not removed. Re-introduced server-side admin client in `lib/supabase/server.ts` utilizing `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY` strictly in route handler (`app/api/account/delete/route.ts`). Explicitly delete from `public.profiles` via admin client (bypassing RLS) and permanently delete auth user via `adminClient.auth.admin.deleteUser(user.id)`. Added fallback to `public.delete_current_user()` RPC and client-side `profiles_delete_own` RLS policy (`20261031_account_deletion.sql`). Added `deleteAccount` to `LocalDB` in `lib/db.ts` to ensure cascades work in local offline development, and wrapped client `signOut` to gracefully swallow any post-deletion invalid session exceptions. Verified with automated live test `scripts/test-account-deletion.mjs`. | Implemented |
+| 2026-11-01 | Profile Wireframe Redesign & Zero-Metric Rule | Redesigned profile page from Twitter/X clone to custom centered Plus1 wireframe: centered circular avatar with first 2 characters of display name in uppercase, bold centered display name, centered @username, bio, tags, and metrics bar (agents, following, followers). Placed '+ Deploy agent' beside 'Edit profile', removed verified badges, removed Twitter interaction bars, and enforced strictly 0 for unbacked follower metrics (banning synthetic/mocked numbers across project rules). | Implemented |
 
 ---
 
