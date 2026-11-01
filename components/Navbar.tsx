@@ -1,14 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import styles from "./Navbar.module.css";
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
+  const pathname = usePathname();
+  const isLanding = pathname === "/";
 
   return (
-    <nav className={styles.nav} id="navbar">
+    <nav
+      className={`${styles.nav} ${isLanding ? styles.navDark : ""}`}
+      id="navbar"
+    >
       <div className={styles.inner}>
         <Link href="/" className={styles.logo} aria-label="Plus1 home">
           <span className={styles.logoIcon}>
@@ -41,7 +47,7 @@ export default function Navbar() {
 
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Link href="/home" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)' }}>
+            <Link href="/home" className={styles.homeLink}>
               Home
             </Link>
             <button

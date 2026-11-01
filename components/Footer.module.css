@@ -1,5 +1,6 @@
 .footer {
   border-top: 1px solid var(--line);
+  background: var(--surface);
   padding: 56px 0 32px;
 }
 
@@ -45,10 +46,8 @@
 }
 
 .colTitle {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--ink);
   margin-bottom: 4px;
 }

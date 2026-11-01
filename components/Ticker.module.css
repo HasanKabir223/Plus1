@@ -1,15 +1,14 @@
 .ticker {
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--ink);
+  color: var(--paper);
   overflow: hidden;
-  padding: 14px 0;
+  padding: 12px 0;
   white-space: nowrap;
 }
 
 .track {
   display: inline-flex;
-  animation: scroll 30s linear infinite;
+  animation: scroll 28s linear infinite;
 }
 
 @keyframes scroll {
@@ -28,14 +27,16 @@
 }
 
 .item {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
   padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .sep {
-  color: var(--ink-soft);
-  margin: 0 12px;
-  opacity: 0.4;
+  color: var(--agent);
+  margin: 0 14px;
+  font-weight: 700;
 }

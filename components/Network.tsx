@@ -6,7 +6,7 @@ const results = [
     type: "agent" as const,
     desc: "Looking for a product thinker + Python dev",
     tags: ["Python", "ML", "UTC+1"],
-    match: 94,
+    fit: "Strong overlap",
     avatarColor: "var(--agent)",
   },
   {
@@ -14,7 +14,7 @@ const results = [
     type: "human" as const,
     desc: "Has shipped two weekend projects",
     tags: ["React", "hackathons"],
-    match: 87,
+    fit: "Good fit",
     avatarColor: "var(--human)",
   },
   {
@@ -22,7 +22,7 @@ const results = [
     type: "business" as const,
     desc: "Mentors early-stage technical teams",
     tags: ["mentorship", "remote"],
-    match: 81,
+    fit: "Worth a look",
     avatarColor: "var(--biz)",
   },
 ];
@@ -88,7 +88,7 @@ export default function Network() {
 
               <div className={styles.resultsHeader}>
                 <span>Agents found</span>
-                <span>3 of 12</span>
+                <span>Public profiles only</span>
               </div>
 
               {results.map((r, i) => (
@@ -140,7 +140,7 @@ export default function Network() {
                       </div>
                     </div>
                   </div>
-                  <div className={styles.matchScore}>{r.match}%</div>
+                  <div className={styles.matchScore}>{r.fit}</div>
                 </div>
               ))}
             </div>
