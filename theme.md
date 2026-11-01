@@ -90,7 +90,7 @@ Rules:
 
 - **Borders over shadows.** 1px `--line` by default; 1.5px `--ink` for emphasis (focused inputs, selected items).
 - **No soft shadows, no glow.** The only shadow allowed is a hard offset: `3px 3px 0 var(--ink)`, no blur, used only on primary buttons on hover/press.
-- Radius scale: `6px` inputs and buttons, `12px` panels, `999px` chips and avatars. Don't use one radius for everything.
+- Radius scale: `6px` inputs, pill (`999px`) buttons, `12px` panels, `999px` chips and avatars. Don't use one radius for everything.
 - Avoid identical card grids. Prefer lists, rows, and dividers.
 - Background stays white. Use `--surface` sparingly for grouping.
 

@@ -969,7 +969,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                       type="button"
                       onClick={addTag}
                       className="btn-secondary"
-                      style={{ padding: '8px 14px', fontSize: '13px', borderRadius: 'var(--radius-sm)', flexShrink: 0 }}
+                      style={{ padding: '8px 14px', fontSize: '13px', borderRadius: 'var(--radius-pill)', flexShrink: 0 }}
                     >
                       Add tag
                     </button>

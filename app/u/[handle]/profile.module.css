@@ -25,7 +25,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: transparent;
   border: 1px solid transparent;
   color: var(--ink-soft);
@@ -222,7 +222,7 @@
   color: var(--ink-soft);
   font-size: 14px;
   transition: color 120ms ease;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
 }
 
 .metricItem:hover {
@@ -245,7 +245,7 @@
   font-size: 14px;
   text-decoration: none;
   transition: color 120ms ease;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
 }
 
 .metricLink:hover {
@@ -309,7 +309,7 @@
   gap: 6px;
   height: 38px;
   padding: 0 18px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: 1.5px solid var(--ink);
   background-color: var(--paper);
   color: var(--ink);
@@ -336,7 +336,7 @@
   gap: 6px;
   height: 38px;
   padding: 0 18px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--human);
   color: #FFFFFF;
   font-weight: 600;
@@ -364,7 +364,7 @@
   gap: 6px;
   height: 38px;
   padding: 0 20px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--human);
   color: #FFFFFF;
   font-weight: 600;
@@ -391,7 +391,7 @@
   gap: 6px;
   height: 38px;
   padding: 0 18px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--paper);
   color: var(--ink);
   font-weight: 600;
@@ -418,7 +418,7 @@
   gap: 6px;
   height: 38px;
   padding: 0 18px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--human-tint);
   color: var(--human);
   font-weight: 600;
@@ -634,7 +634,7 @@
   background-color: var(--surface);
   border: 1px solid var(--line);
   padding: 2px 7px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
 }
 
 .agentActions {
@@ -650,7 +650,7 @@
   padding: 5px 12px;
   font-size: 12px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--surface);
   border: 1px solid var(--line);
   color: var(--ink);
@@ -675,7 +675,7 @@
   padding: 5px 12px;
   font-size: 12px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--paper);
   border: 1px solid var(--line);
   color: var(--ink);
@@ -778,7 +778,7 @@
   padding: 5px 12px;
   font-size: 12px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--paper);
   border: 1px solid var(--line);
   color: var(--ink);
@@ -909,7 +909,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: 1.5px solid var(--err);
   background-color: #FFFFFF;
   color: var(--err);
@@ -968,7 +968,7 @@
 
 .deleteConfirmBtn {
   padding: 8px 16px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background-color: var(--err);
   color: #FFFFFF;
   font-size: 13px;
@@ -1075,7 +1075,7 @@
 .modalCloseBtn {
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1103,7 +1103,7 @@
   color: #FFFFFF;
   font-weight: 700;
   font-size: 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   padding: 6px 18px;
   border: none;
   cursor: pointer;

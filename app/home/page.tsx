@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
 import type { Agent, InboxItem, Conversation } from '@/types/database';
+import FeedList from '@/components/feed/feed-list';
+import styles from './home.module.css';
 import {
   Play,
   RotateCw,
@@ -16,11 +18,21 @@ import {
   AlertCircle,
   Clock,
   Radio,
+  MessageSquare,
+  Inbox,
 } from 'lucide-react';
 
-export default function HomePage() {
+function HomeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
+
+  const tabParam = searchParams?.get('tab');
+  const currentTab: 'feed' | 'inbox' = tabParam === 'inbox' ? 'inbox' : 'feed';
+
+  const handleTabChange = (tab: 'feed' | 'inbox') => {
+    router.replace(`/home?tab=${tab}`, { scroll: false });
+  };
 
   // Section 1: Agents
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -41,7 +53,7 @@ export default function HomePage() {
   const [threadsError, setThreadsError] = useState<string | null>(null);
 
   // Load section 1
-  const fetchAgents = async () => {
+  const fetchAgents = React.useCallback(async () => {
     if (!user) return;
     try {
       setAgentsError(null);
@@ -52,10 +64,10 @@ export default function HomePage() {
     } finally {
       setLoadingAgents(false);
     }
-  };
+  }, [user]);
 
   // Load section 2
-  const fetchInbox = async () => {
+  const fetchInbox = React.useCallback(async () => {
     if (!user) return;
     try {
       setInboxError(null);
@@ -66,10 +78,10 @@ export default function HomePage() {
     } finally {
       setLoadingInbox(false);
     }
-  };
+  }, [user]);
 
   // Load section 3
-  const fetchThreads = async () => {
+  const fetchThreads = React.useCallback(async () => {
     if (!user) return;
     try {
       setThreadsError(null);
@@ -80,23 +92,65 @@ export default function HomePage() {
     } finally {
       setLoadingThreads(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    fetchAgents();
-    fetchInbox();
-    fetchThreads();
+    let ignore = false;
+    if (user) {
+      db.getAgentsByOwner(user.id)
+        .then((data) => {
+          if (!ignore) {
+            setAgents(data);
+            setLoadingAgents(false);
+          }
+        })
+        .catch((e: unknown) => {
+          if (!ignore) {
+            setAgentsError(e instanceof Error ? e.message : 'Failed to load agents');
+            setLoadingAgents(false);
+          }
+        });
+
+      db.getInboxItems(user.id)
+        .then((data) => {
+          if (!ignore) {
+            setInboxItems(data);
+            setLoadingInbox(false);
+          }
+        })
+        .catch((e: unknown) => {
+          if (!ignore) {
+            setInboxError(e instanceof Error ? e.message : 'Failed to load inbox');
+            setLoadingInbox(false);
+          }
+        });
+
+      db.getLiveConversationsForUser(user.id)
+        .then((data) => {
+          if (!ignore) {
+            setLiveThreads(data);
+            setLoadingThreads(false);
+          }
+        })
+        .catch((e: unknown) => {
+          if (!ignore) {
+            setThreadsError(e instanceof Error ? e.message : 'Failed to load live threads');
+            setLoadingThreads(false);
+          }
+        });
+    }
 
     const unsubAgents = db.subscribe('agents', fetchAgents);
     const unsubInbox = db.subscribe('inbox', fetchInbox);
     const unsubConvs = db.subscribe('conversations', fetchThreads);
 
     return () => {
+      ignore = true;
       unsubAgents();
       unsubInbox();
       unsubConvs();
     };
-  }, [user]);
+  }, [user, fetchAgents, fetchInbox, fetchThreads]);
 
   // Actions
   const handleToggleStatus = async (agent: Agent) => {
@@ -363,9 +417,50 @@ export default function HomePage() {
         </section>
 
         {/* ============================================================ */}
+        {/* TABS NAVIGATION: FEED & INBOX                                */}
+        {/* ============================================================ */}
+        <div className={styles.tabsNav} role="tablist" aria-label="Home tabs">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={currentTab === 'feed'}
+            onClick={() => handleTabChange('feed')}
+            className={`${styles.tabItem} ${currentTab === 'feed' ? styles.tabItemActive : ''}`}
+          >
+            <MessageSquare size={16} />
+            <span>Feed</span>
+            {currentTab === 'feed' && <div className={styles.tabIndicator} />}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={currentTab === 'inbox'}
+            onClick={() => handleTabChange('inbox')}
+            className={`${styles.tabItem} ${currentTab === 'inbox' ? styles.tabItemActive : ''}`}
+          >
+            <Inbox size={16} />
+            <span>Inbox</span>
+            {inboxItems.length > 0 && (
+              <span className={`${styles.tabBadge} ${currentTab === 'inbox' ? styles.tabBadgeActive : ''}`}>
+                {inboxItems.length}
+              </span>
+            )}
+            {currentTab === 'inbox' && <div className={styles.tabIndicator} />}
+          </button>
+        </div>
+
+        {/* FEED TAB CONTENT */}
+        {currentTab === 'feed' && (
+          <section className={styles.tabContent} aria-label="Timeline feed">
+            <FeedList />
+          </section>
+        )}
+
+        {/* ============================================================ */}
         {/* SECTION 2: INBOX (AGENT REPORTS TO OWNER)                    */}
         {/* ============================================================ */}
-        <section id="inbox" className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
+        {currentTab === 'inbox' && (
+          <section id="inbox" className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
           <div
             style={{
               display: 'flex',
@@ -569,6 +664,7 @@ export default function HomePage() {
             </div>
           )}
         </section>
+        )}
 
         {/* ============================================================ */}
         {/* SECTION 3: LIVE THREADS                                      */}
@@ -776,3 +872,18 @@ export default function HomePage() {
     </AppShell>
   );
 }
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell headerTitle="Home">
+          <div style={{ padding: '24px', color: 'var(--ink-soft)' }}>Loading...</div>
+        </AppShell>
+      }
+    >
+      <HomeContent />
+    </Suspense>
+  );
+}
+

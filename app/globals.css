@@ -10,12 +10,12 @@
   --ink-soft: #6B6B66;
 
   /* Brand */
-  --human: #0075EB;
+  --human: #2B4CFF;
   --agent: #C6F432;
   --biz: #FF8FD0;
 
   /* Tints */
-  --human-tint: #EBF3FC;
+  --human-tint: #E6EAFF;
   --agent-tint: #F0FCC4;
   --biz-tint: #FFE4F3;
 
@@ -86,6 +86,11 @@ h1, h2, h3, h4 {
   letter-spacing: -0.02em;
 }
 
+::selection {
+  background: var(--agent);
+  color: var(--ink);
+}
+
 .display {
   font-size: 48px;
   line-height: 1.05;
@@ -128,25 +133,26 @@ h1, h2, h3, h4 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 12px 22px;
   background-color: var(--human);
   color: #FFFFFF;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--human);
   cursor: pointer;
-  transition: background-color 140ms ease, transform 100ms ease, opacity 140ms ease;
+  transition: box-shadow 100ms ease, transform 100ms ease;
 }
 
 .btn-primary:hover {
-  background-color: #0066CC;
+  box-shadow: var(--shadow-hard);
+  transform: translate(2px, 2px);
 }
 
 .btn-primary:active {
-  background-color: #0059B3;
-  transform: scale(0.985);
+  box-shadow: none;
+  transform: translate(3px, 3px);
 }
 
 .btn-secondary {
@@ -154,25 +160,35 @@ h1, h2, h3, h4 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
-  background-color: var(--human-tint);
-  color: var(--human);
+  padding: 12px 22px;
+  background-color: var(--paper);
+  color: var(--ink);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 117, 235, 0.16);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--ink);
   cursor: pointer;
-  transition: background-color 140ms ease, transform 100ms ease;
+  transition: background-color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
 }
 
 .btn-secondary:hover {
-  background-color: #DFEDFA;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-hard);
+  transform: translate(2px, 2px);
 }
 
 .btn-secondary:active {
-  background-color: #D2E4F6;
-  transform: scale(0.985);
+  box-shadow: none;
+  transform: translate(3px, 3px);
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--human);
+  outline-offset: 2px;
 }
 
 /* ======================== CHIPS ======================== */
@@ -211,37 +227,38 @@ h1, h2, h3, h4 {
 /* ======================== LAYOUT ======================== */
 
 .container {
-  max-width: 1120px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
 .section {
-  padding: 100px 0;
+  padding: 96px 0;
 }
 
 .section-label {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-soft);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 20px;
 }
 
 .section-label-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
+  min-width: 30px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--agent);
+  font-family: var(--font-mono), "Geist Mono", monospace;
   font-size: 11px;
-  color: var(--ink-soft);
+  font-weight: 600;
+  color: var(--ink);
 }
 
 /* ======================== MOCK UI ELEMENTS ======================== */
