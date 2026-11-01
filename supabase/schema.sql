@@ -137,6 +137,58 @@ create table if not exists public.follows (
 
 create index if not exists follows_following_idx on public.follows (following_id);
 
+-- ------------------------------------------------------------------------------
+-- 1.7 POSTS (Feed Timeline Posts)
+-- ------------------------------------------------------------------------------
+-- Stores human-authored and agent-authored public feed posts.
+-- 'author_profile_id': Human author (references profiles).
+-- 'author_agent_id': Agent author (references agents).
+-- 'parent_id': Optional parent post for future replies.
+-- 'body': Post content, 1 to 500 characters.
+-- ------------------------------------------------------------------------------
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  author_profile_id uuid,
+  author_agent_id uuid,
+  parent_id uuid,
+  body text not null,
+  created_at timestamptz not null default now(),
+
+  -- Foreign key constraints with explicit names for PostgREST embedding
+  constraint posts_author_profile_id_fkey 
+    foreign key (author_profile_id) references public.profiles(id) on delete cascade,
+  constraint posts_author_agent_id_fkey 
+    foreign key (author_agent_id) references public.agents(id) on delete cascade,
+  -- Replies survive their parent (set null, not cascade delete).
+  constraint posts_parent_id_fkey 
+    foreign key (parent_id) references public.posts(id) on delete set null,
+
+  -- Author constraint: exactly one author (human profile OR agent) must be set
+  constraint posts_author_check 
+    check (num_nonnulls(author_profile_id, author_agent_id) = 1),
+
+  -- Body constraint: text length between 1 and 500 characters, non-empty
+  constraint posts_body_length 
+    check (char_length(body) between 1 and 500 and length(trim(body)) > 0)
+);
+
+-- Performance indexes for posts
+create index if not exists posts_feed_idx 
+  on public.posts (created_at desc) 
+  where parent_id is null;
+
+create index if not exists posts_created_at_desc_idx 
+  on public.posts (created_at desc);
+
+create index if not exists posts_parent_id_idx 
+  on public.posts (parent_id);
+
+create index if not exists posts_author_profile_id_idx 
+  on public.posts (author_profile_id);
+create index if not exists posts_author_agent_id_idx 
+  on public.posts (author_agent_id);
+
+
 
 
 
@@ -194,12 +246,17 @@ create policy "profiles_delete_own"
 -- ------------------------------------------------------------------------------
 -- 2.2 AGENTS POLICIES
 -- ------------------------------------------------------------------------------
--- Rule 1: Anyone logged in can see public agents; owners can always see their own.
+-- Rule 1: Anyone logged in can see public agents; owners can see their own.
+-- Private agents stay private even after posting.
 drop policy if exists "Public agents viewable by authenticated users" on public.agents;
-create policy "Public agents viewable by authenticated users"
+drop policy if exists "agents_select_policy" on public.agents;
+create policy "agents_select_policy"
   on public.agents for select
   to authenticated
-  using (is_public = true or owner_id = auth.uid());
+  using (
+    is_public = true 
+    or owner_id = (select auth.uid())
+  );
 
 -- Rule 2: Only the owner has full permissions (create, edit, delete, pause) on their agent.
 drop policy if exists "Owners have full control over their agents" on public.agents;
@@ -300,6 +357,39 @@ create policy "unfollow as yourself"
   on public.follows for delete
   to authenticated
   using ((select auth.uid()) = follower_id);
+
+-- ------------------------------------------------------------------------------
+-- 2.7 POSTS POLICIES
+-- ------------------------------------------------------------------------------
+alter table public.posts enable row level security;
+
+-- SELECT: Authenticated users can view all posts
+drop policy if exists "posts_select_authenticated" on public.posts;
+create policy "posts_select_authenticated"
+  on public.posts for select
+  to authenticated
+  using (true);
+
+-- INSERT: Authenticated users can only insert their own human posts
+drop policy if exists "posts_insert_own_human" on public.posts;
+create policy "posts_insert_own_human"
+  on public.posts for insert
+  to authenticated
+  with check (
+    author_profile_id = (select auth.uid())
+    and author_agent_id is null
+  );
+
+-- DELETE: Authenticated users can only delete their own human posts
+drop policy if exists "posts_delete_own_human" on public.posts;
+create policy "posts_delete_own_human"
+  on public.posts for delete
+  to authenticated
+  using (author_profile_id = (select auth.uid()));
+
+-- Table grants
+grant select, insert, delete on public.posts to authenticated;
+
 
 
 -- ==============================================================================

@@ -65,3 +65,53 @@ export type ProfileStats = {
   following_count: number;
 };
 
+// ==============================================================================
+// Feed & Posts Types
+// ==============================================================================
+export type Post = {
+  id: string;
+  author_profile_id: string | null;
+  author_agent_id: string | null;
+  parent_id: string | null;
+  body: string;
+  created_at: string;
+};
+
+export type PostAuthorProfile = {
+  id: string;
+  username: string;
+  profilename?: string | null;
+};
+
+export type PostAuthorAgent = {
+  id: string;
+  name: string;
+  owner: {
+    id: string;
+    username: string;
+    profilename?: string | null;
+  } | null;
+};
+
+export type PostWithAuthor = Post & {
+  author_profile: PostAuthorProfile | null;
+  author_agent: PostAuthorAgent | null;
+};
+
+export type CreatePostInput = {
+  body: string;
+  author_profile_id: string;
+};
+
+export type FetchFeedPostsOptions = {
+  cursor?: string | null;
+  limit?: number;
+};
+
+export type FeedCursorResult = {
+  posts: PostWithAuthor[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+

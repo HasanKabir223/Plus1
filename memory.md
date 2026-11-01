@@ -17,20 +17,21 @@
 
 | # | Section | Key content |
 |---|---|---|
-| 0 | **Navbar** | Plus1 logo, nav links (How it works, Use cases, Trust, Log in / Home), CTA "Get Started →" or "Log out" |
-| 1 | **Hero** | Badge line, big headline, sub-copy, two CTAs, trust line |
+| 0 | **Navbar** | Full-bleed (flush to corners). Dark navy variant on `/` to blend with the hero; white elsewhere. Plus1 logo, nav links (How it works, Use cases, Trust, Log in / Home), CTA "Get Started →" or "Log out" |
+| 1 | **Hero** | Split layout: left headline + sub-copy + two CTAs + trust line (no eyebrow pill); right live agent-inbox preview card. Deep-navy WebGL ASCII backdrop (lazy-loaded via `HeroAscii`), white headline text |
 | 2 | **Ticker bar** | Horizontal scrolling keywords: Less searching / More introductions / Human agency, kept / Built for real people |
 | 3 | **The Premise** (01) | Headline + body, 3-step walkthrough with mock UI cards |
 | 4 | **The Network** (02) | Headline + body, mock network search UI |
 | 5 | **The Handoff** (03) | Mock agent-to-agent conversation thread + headline + body + checklist |
-| 6 | **Use Cases** | Cards/rows for: Find teammates, Find study partners, Get leads, Business agents |
+| 6 | **Use Cases** | Dense divider rows (not cards) for: Find teammates, Find study partners, Get leads, Business agents. Ticker is an ink strip. CTAs and all buttons are pill-shaped |
 | 7 | **Footer** | Logo, nav links, legal, social |
 
 ---
 
 ## 3. Design rules (from theme.md)
 
-- **No gradients, glass blur, or glow.** Solid fills only.
+- **No gradients, glass blur, or glow.** Solid fills only. Exception: the landing hero uses the WebGL ASCII backdrop (explicit user request); copy stays legible via overlay veil.
+- Buttons are pill (`999px`) everywhere, per the reference design; inputs stay `6px`.
 - **No purple.** Avoid anything that feels "AI slop."
 - Colors: Blue (`#2B4CFF` / `#0075EB`) = human, Lime (`#C6F432`) = agent, Pink (`#FF8FD0`) = business.
 - Borders over shadows. Only shadow allowed: `3px 3px 0 var(--ink)` hard offset on hover.
@@ -68,19 +69,22 @@ plus1/
 ├── components/
 │   ├── AppShell.tsx                    # Twitter/X style navigation rail & sidebar layout
 │   ├── AppShell.module.css
-│   ├── Navbar.tsx                      # Public & auth-aware navigation bar
+│   ├── Navbar.tsx                      # Public & auth-aware navigation bar (dark variant on `/`)
 │   ├── Navbar.module.css
-│   ├── Hero.tsx                        # Landing hero with "Get Started →" CTA
+│   ├── Hero.tsx                        # Split landing hero with agent-inbox preview
+│   ├── HeroAscii.tsx                   # Client wrapper lazy-loading GradientASCII (ssr: false)
+│   ├── PageSkeleton.tsx                # Shared loading skeleton for route transitions
 │   ├── GradientASCII.jsx               # WebGL2 interactive ASCII shader
 │   ├── GradientASCII.d.ts
 │   ├── GradientASCII.css
 │   ├── Ticker.tsx
 │   ├── Premise.tsx
-│   ├── Network.tsx
+│   ├── Network.tsx                     # Fit labels only; no match percentages (zero-metric rule)
 │   ├── Handoff.tsx
-│   ├── UseCases.tsx
+│   ├── UseCases.tsx                    # Divider rows, not cards
 │   ├── Cta.tsx
 │   └── Footer.tsx
+├── app/loading.tsx + per-route loading.tsx (home, explore, u/[handle], agents/[id], threads/[id])
 ├── lib/
 │   ├── auth-context.tsx                # React Auth Context (session, user, profile, signUp, signIn, signOut)
 │   ├── db.ts                           # Unified database API layer (Supabase PostgREST + local storage fallback)
@@ -102,7 +106,8 @@ plus1/
 │       ├── 20261031_account_deletion.sql
 │       └── 20261101_follows_and_profile_stats.sql
 └── scripts/
-    ├── test-onboarding-logic.mjs       # Comprehensive unit tests for onboarding & route guard logic
+    ├── test-onboarding-logic.mjs       # Proxy + AuthProvider routing contract tests (onboarding gating)
+    ├── test-proxy-perf.mjs            # Regression guard: proxy performs no DB query, has no-cookie fast path
     ├── test-account-deletion.mjs       # Comprehensive unit and integration tests for account deletion
     ├── test-follows.mjs                # Unit tests for followers/following logic and schema validation
     └── test-follows-stress.mjs         # Stress and concurrency tests for social graph operations
@@ -134,20 +139,28 @@ plus1/
 
 ```mermaid
 flowchart TD
-    A["Visitor"] --> B{"Authenticated?"}
+    A["Visitor"] --> B{"Auth cookie present?"}
     B -->|"No"| C{"Public Route?\n(/, /login, /signup, /signin)"}
-    C -->|"Yes"| D["Allow Access"]
+    C -->|"Yes"| D["Allow Access (no Supabase call)"]
     C -->|"No"| E["Redirect to /login"]
 
-    B -->|"Yes"| F{"Is Profile Onboarded?\n(!dummy username && !dummy profilename)"}
-    F -->|"No"| G{"Already on /onboarding?"}
-    G -->|"Yes"| H["Render Onboarding Form"]
-    G -->|"No"| I["Strictly Redirect to /onboarding"]
+    B -->|"Yes"| F["proxy: verify with getUser()"]
+    F --> G{"Authenticated?"}
+    G -->|"No"| C
+    G -->|"Yes"| H{"Visiting Auth Route?\n(/login, /signup, /signin)"}
+    H -->|"Yes"| I["Redirect to Homepage (/)"]
+    H -->|"No"| J["Allow (client guard enforces onboarding)"]
 
-    F -->|"Yes"| J{"Visiting Auth Route?\n(/login, /signup, /signin, /onboarding)"}
-    J -->|"Yes"| K["Redirect to Homepage (/)"]
-    J -->|"No"| L["Allow Access to Protected Route (/home, /explore, /u/...)"]
+    J --> K{"Client: Profile Onboarded?\n(!dummy username && !dummy profilename)"}
+    K -->|"No"| L{"Already on /onboarding?"}
+    L -->|"Yes"| M["Render Onboarding Form"]
+    L -->|"No"| N["Redirect to /onboarding"]
+    K -->|"Yes"| O{"Visiting Auth/Onboarding Route?"}
+    O -->|"Yes"| P["Redirect to Homepage (/)"]
+    O -->|"No"| Q["Render Protected Route (/home, /explore, /u/...)"]
 ```
+
+Enforcement is split: the proxy only separates logged-out from logged-in (fast, no database query); `AuthProvider` owns the onboarding redirects client-side. RLS remains the data boundary.
 
 ### Flow Details:
 1. **Signup (`/signup`)**:
@@ -162,6 +175,7 @@ flowchart TD
 3. **Login (`/login`)**:
    - Collects email + password, calls `signInWithPassword()`.
    - On success: checks `profiles.username` and `profilename`. If onboarded &rarr; redirects to `/`; if un-onboarded &rarr; redirects to `/onboarding`.
+   - The proxy sends any logged-in visitor on auth pages to `/`; `AuthProvider` then forwards un-onboarded users to `/onboarding`.
    - Generic error messages only: `"Invalid email or password"`.
 4. **Logout**:
    - Top navigation renders a flat secondary Logout button when user is authenticated.
@@ -187,14 +201,19 @@ flowchart TD
 | 2026-10-31 | Profile & Auth Deletion Restoration | Fixed account deletion failure where `auth.users` and `public.profiles` rows were not removed. Re-introduced server-side admin client in `lib/supabase/server.ts` utilizing `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY` strictly in route handler (`app/api/account/delete/route.ts`). Explicitly delete from `public.profiles` via admin client (bypassing RLS) and permanently delete auth user via `adminClient.auth.admin.deleteUser(user.id)`. Added fallback to `public.delete_current_user()` RPC and client-side `profiles_delete_own` RLS policy (`20261031_account_deletion.sql`). Added `deleteAccount` to `LocalDB` in `lib/db.ts` to ensure cascades work in local offline development, and wrapped client `signOut` to gracefully swallow any post-deletion invalid session exceptions. Verified with automated live test `scripts/test-account-deletion.mjs`. | Implemented |
 | 2026-11-01 | Profile Wireframe Redesign & Zero-Metric Rule | Redesigned profile page from Twitter/X clone to custom centered Plus1 wireframe: centered circular avatar with first 2 characters of display name in uppercase, bold centered display name, centered @username, bio, tags, and metrics bar (agents, following, followers). Placed '+ Deploy agent' beside 'Edit profile', removed verified badges, removed Twitter interaction bars, and enforced strictly 0 for unbacked follower metrics (banning synthetic/mocked numbers across project rules). | Implemented |
 | 2026-11-01 | Followers & Following Architecture | Implemented real followers and following social graph subsystem. Created `public.follows` table with composite PK, self-follow check constraint, index on `following_id`, and authenticated RLS policies. Created `public.profile_stats` view with `security_invoker = true` computing live follower, following, and agent counts. Updated `types/database.ts` and `lib/db.ts` with Supabase PostgREST client methods and seamless LocalDB offline fallback. Connected profile UI (`app/u/[handle]/page.tsx`) with real follow/unfollow toggle, self-follow prevention, optimistic updates, and error rollback. Verified with `scripts/test-follows.mjs`, adversarial stress harness `scripts/test-follows-stress.mjs`, and clean Next.js 16 production build. | Implemented |
+| 2026-11-01 | Hosted Supabase Sync & PostgREST Reload | Diagnosed missing `public.follows` table on hosted project `uncybsyfxfdqehmcuvcd`. Applied `20261101_follows_and_profile_stats.sql` directly to the hosted DB via Management API, repaired migration history (`supabase migration repair --linked --status applied 20261101`), verified RLS (`relrowsecurity = true`), composite primary keys, cascade foreign keys, and indexes. Reloaded PostgREST schema cache with `notify pgrst, 'reload schema';`. Confirmed `follows` and `profile_stats` are active on the hosted database. | Implemented |
+| 2026-11-02 | Landing Redesign (split hero, dark ASCII, pill buttons) | Rebuilt landing: split hero (copy + live agent-inbox preview), deep-navy WebGL ASCII backdrop lazy-loaded via `HeroAscii` (`next/dynamic`, `ssr: false`), dark navy navbar variant on `/` for a seamless band, full-bleed nav flush to corners, eyebrow pill and corner labels removed, Network match `%` replaced with fit labels, UseCases cards converted to divider rows, ink Ticker strip, pill buttons site-wide (`theme.md` radius scale updated). | Implemented |
+| 2026-11-02 | Proxy Perf Fix (route transitions) | Root-caused multi-second `proxy.ts` timings (1.6–6.7s per navigation) to the per-request `profiles` query. Proxy now: no-cookie fast path (zero Supabase calls), `getUser()` verification only, no database lookup; onboarding gating moved to `AuthProvider` (which already enforced it). Added `loading.tsx` skeletons for home/explore/profile/agent/thread + global fallback, `data-scroll-behavior="smooth"` in layout. Verified with `scripts/test-proxy-perf.mjs` + updated `scripts/test-onboarding-logic.mjs`, clean build. | Implemented |
+| 2026-11-02 | Commits `3c1588c` + `23d8432` | Committed proxy/perf/loading work and landing restyle. Note: `3c1588c` accidentally swept in `app/home/page.tsx` (another agent's in-progress feed-tab work) via a broad `app` pathspec — worktree untouched, needs reassignment, not a revert. `test-onboarding-logic.mjs` updates live only in the worktree (file is gitignored). Feed-module build fix (duplicate `handleLoadMore` in `components/feed/feed-list.tsx`) also left uncommitted with that agent's work. | Implemented |
 
 ---
 
 ## 8. Open Decisions & Notes
 
-- **Remote Database Sync**: To ensure the cloud Supabase instance matches local schema, execute the SQL migrations in the Supabase Dashboard SQL Editor:
-  1. `supabase/migrations/20261031_remove_dummy_profile_defaults.sql` (dummy fallback removal)
-  2. `supabase/migrations/20261031_account_deletion.sql` (RLS delete policy and cascade RPC)
-  3. `supabase/migrations/20261101_follows_and_profile_stats.sql` (follows table, RLS, and profile_stats view)
+- **Route performance**: dev logs showed `proxy.ts` at 1.6–6.7s per navigation; root cause was the per-request `profiles` query. After the fix, logged-out traffic makes zero Supabase calls; logged-in traffic pays one `getUser()` call. Restart `npm run dev` to pick up proxy changes.
+- **In-progress sibling work (uncommitted at time of writing)**: home feed tab (`app/home/page.tsx`, `app/home/home.module.css`), `components/feed/` module, challenger scripts, posts migration `20261102_posts_schema_and_rls.sql`, schema/type updates.
+- **Remote Database Sync**:
+  - `public.follows` and `public.profile_stats` are **applied and verified** on the hosted Supabase database (`uncybsyfxfdqehmcuvcd`).
+  - Migration versions `20261101` and `20261030` are marked as `applied` in `supabase_migrations.schema_migrations`.
 - **Email Confirmation**: Must remain toggled **OFF** in Supabase Dashboard (**Authentication &rarr; Providers &rarr; Email**) so signups log in immediately and proceed directly to `/onboarding`.
 - **Domain & Deployment**: Ready for Vercel deployment with Next.js 16 App Router and Turbopack.

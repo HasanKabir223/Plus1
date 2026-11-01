@@ -1,5 +1,21 @@
 import { supabase, isSupabaseConfigured } from './supabase/client';
-import type { Profile, Agent, Conversation, Message, InboxItem, Follow, ProfileStats } from '@/types/database';
+import type {
+  Profile,
+  Agent,
+  Conversation,
+  Message,
+  InboxItem,
+  Follow,
+  ProfileStats,
+  Post,
+  PostAuthorProfile,
+  PostAuthorAgent,
+  PostWithAuthor,
+  CreatePostInput,
+  FetchFeedPostsOptions,
+  FeedCursorResult,
+} from '@/types/database';
+
 
 // Initial DB seed data (loaded into storage on first run if not configured in remote Supabase)
 const INITIAL_PROFILES: Profile[] = [
@@ -167,6 +183,21 @@ const INITIAL_INBOX: InboxItem[] = [
 
 const INITIAL_FOLLOWS: Follow[] = [];
 
+// Strict zero-metric invariant: no hardcoded or fake initial posts
+const INITIAL_POSTS: Post[] = [];
+
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+
 // Browser Local DB Storage Helper
 class LocalDB {
   private memoryStore: Map<string, unknown> = new Map();
@@ -322,6 +353,11 @@ class LocalDB {
     );
     this.setFollows(remainingFollows);
 
+    const remainingPosts = this.getPosts().filter(
+      (p) => p.author_profile_id !== userId && (!p.author_agent_id || !userAgentIds.has(p.author_agent_id))
+    );
+    this.setPosts(remainingPosts);
+
     if (typeof window !== 'undefined') {
       const currentId = localStorage.getItem('plus1_session_user_id');
       if (currentId === userId) {
@@ -329,7 +365,142 @@ class LocalDB {
       }
     }
   }
+
+  getPosts(): Post[] {
+    return this.getStorage('posts', INITIAL_POSTS);
+  }
+
+  setPosts(data: Post[]) {
+    this.setStorage('posts', data);
+  }
+
+  createPost(input: CreatePostInput & { id?: string; created_at?: string }): PostWithAuthor {
+    const trimmed = (input.body || '').trim();
+    if (!trimmed || trimmed.length > 500) {
+      throw new Error('Post body must be between 1 and 500 characters');
+    }
+    if (!input.author_profile_id) {
+      throw new Error('author_profile_id is required');
+    }
+
+    const newPost: Post = {
+      id: input.id || generateUUID(),
+      author_profile_id: input.author_profile_id,
+      author_agent_id: null,
+      parent_id: null,
+      body: trimmed,
+      created_at: input.created_at || new Date().toISOString(),
+    };
+
+    const currentPosts = input.id
+      ? this.getPosts().filter((p) => p.id !== input.id)
+      : this.getPosts();
+    this.setPosts([newPost, ...currentPosts]);
+
+    const profile = this.getProfiles().find((p) => p.id === input.author_profile_id);
+    const authorProfile: PostAuthorProfile | null = profile
+      ? {
+          id: profile.id,
+          username: profile.username,
+          profilename: profile.profilename || profile.name || null,
+        }
+      : null;
+
+    return {
+      ...newPost,
+      author_profile: authorProfile,
+      author_agent: null,
+    };
+  }
+
+  deletePost(postId: string, currentUserId: string): boolean {
+    if (!postId || !currentUserId) return false;
+    const posts = this.getPosts();
+    const filtered = posts.filter(
+      (p) => !(p.id === postId && p.author_profile_id === currentUserId)
+    );
+    if (filtered.length !== posts.length) {
+      this.setPosts(filtered);
+      return true;
+    }
+    return false;
+  }
+
+  fetchFeedPosts(options?: FetchFeedPostsOptions): FeedCursorResult {
+    const limit = options?.limit ?? 20;
+    const decoded = decodeFeedCursor(options?.cursor);
+    const allPosts = this.getPosts();
+
+    // Top-level posts only
+    let filtered = allPosts.filter((p) => p.parent_id === null || !p.parent_id);
+
+    // Order newest first, id as tiebreaker for shared timestamps
+    filtered.sort((a, b) => {
+      const dt = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (dt !== 0) return dt;
+      return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+    });
+
+    // Cursor pagination: items strictly older than the cursor position
+    if (decoded) {
+      filtered = filtered.filter((p) => isOlderThanCursor(p, decoded));
+    }
+
+    const hasMore = filtered.length > limit;
+    const sliced = filtered.slice(0, limit);
+    const nextCursor = hasMore && sliced.length > 0 ? encodeFeedCursor(sliced[sliced.length - 1]) : null;
+
+    const profiles = this.getProfiles();
+    const agents = this.getAgents();
+
+    const postsWithAuthors: PostWithAuthor[] = sliced.map((post) => {
+      let author_profile: PostAuthorProfile | null = null;
+      let author_agent: PostAuthorAgent | null = null;
+
+      if (post.author_profile_id) {
+        const foundProf = profiles.find((p) => p.id === post.author_profile_id);
+        if (foundProf) {
+          author_profile = {
+            id: foundProf.id,
+            username: foundProf.username,
+            profilename: foundProf.profilename || foundProf.name || null,
+          };
+        }
+      }
+
+      if (post.author_agent_id) {
+        const foundAgent = agents.find((a) => a.id === post.author_agent_id);
+        if (foundAgent) {
+          const ownerProf = profiles.find((p) => p.id === foundAgent.owner_id);
+          author_agent = {
+            id: foundAgent.id,
+            name: foundAgent.name,
+            owner: ownerProf
+              ? {
+                  id: ownerProf.id,
+                  username: ownerProf.username,
+                  profilename: ownerProf.profilename || ownerProf.name || null,
+                }
+              : null,
+          };
+        }
+      }
+
+      return {
+        ...post,
+        author_profile,
+        author_agent,
+      };
+    });
+
+    return {
+      posts: postsWithAuthors,
+      nextCursor,
+      hasMore,
+    };
+  }
 }
+
 
 const localDb = new LocalDB();
 export { localDb, LocalDB };
@@ -393,6 +564,88 @@ function shouldAttemptRemoteFollows(): boolean {
   }
   return true;
 }
+
+// Posts Remote Schema Capability State & Helpers
+let isPostsRemoteAvailable: boolean | null = null;
+let lastPostsRemoteCheck = 0;
+const POSTS_RECHECK_INTERVAL_MS = 30_000;
+
+function handlePostsError(operation: string, err: unknown): void {
+  if (isPgrstMissingTable(err)) {
+    isPostsRemoteAvailable = false;
+    lastPostsRemoteCheck = Date.now();
+    if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+      const warnedKey = '__pgrst205_posts_notified__';
+      if (!(window as unknown as Record<string, boolean>)[warnedKey]) {
+        (window as unknown as Record<string, boolean>)[warnedKey] = true;
+        console.info(
+          '[plus1] Notice: Remote "public.posts" table is not yet in the Supabase schema cache. LocalDB fallback active.'
+        );
+      }
+    }
+    return;
+  }
+  console.warn(`Supabase ${operation} error, falling back:`, err);
+}
+
+function shouldAttemptRemotePosts(): boolean {
+  if (!isSupabaseConfigured || !supabase) return false;
+  if (isPostsRemoteAvailable === false) {
+    if (Date.now() - lastPostsRemoteCheck > POSTS_RECHECK_INTERVAL_MS) {
+      isPostsRemoteAvailable = null;
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
+// Composite feed cursor: "<created_at>|<id>". Ordering by created_at
+// alone skips or repeats posts that share a timestamp, so the id is
+// the tiebreaker in both the remote query and the LocalDB mirror.
+function encodeFeedCursor(post: { created_at: string; id: string }): string {
+  return `${post.created_at}|${post.id}`;
+}
+
+function decodeFeedCursor(cursor?: string | null): { created_at: string; id: string } | null {
+  if (!cursor) return null;
+  const sep = cursor.lastIndexOf('|');
+  if (sep === -1) return { created_at: cursor, id: '' };
+  return { created_at: cursor.slice(0, sep), id: cursor.slice(sep + 1) };
+}
+
+function isOlderThanCursor(
+  post: { created_at: string; id: string },
+  cur: { created_at: string; id: string }
+): boolean {
+  const t = new Date(post.created_at).getTime();
+  const ct = new Date(cur.created_at).getTime();
+  if (t !== ct) return t < ct;
+  return post.id < cur.id;
+}
+
+const POSTS_EMBED_QUERY = `
+  id,
+  body,
+  created_at,
+  author_profile_id,
+  author_agent_id,
+  parent_id,
+  author_profile:profiles!author_profile_id (
+    id,
+    username,
+    profilename
+  ),
+  author_agent:agents!author_agent_id (
+    id,
+    name,
+    owner:profiles!owner_id (
+      id,
+      username,
+      profilename
+    )
+  )
+`;
 
 export const db = {
   // Profiles
@@ -560,7 +813,7 @@ export const db = {
       if (tag) q = q.contains('looking_for', [tag]);
       if (query) q = q.or(`username.ilike.%${query}%,bio.ilike.%${query}%,handle.ilike.%${query}%,profilename.ilike.%${query}%`);
       const { data } = await q;
-      return ((data || []) as any[])
+      return ((data || []) as Array<Profile & { handle?: string }>)
         .filter((p) => !isDummyUsername(p.username) && !isDummyProfileName(p.profilename || p.name))
         .map((p) => {
           const username = (p.username || '').trim();
@@ -1068,6 +1321,149 @@ export const db = {
     return this.listFollowing(profileId);
   },
 
+  // Feed & Posts Methods
+  async fetchFeedPosts(options?: FetchFeedPostsOptions): Promise<FeedCursorResult> {
+    const limit = options?.limit ?? 20;
+    const cursor = options?.cursor;
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        let query = supabase
+          .from('posts')
+          .select(POSTS_EMBED_QUERY)
+          .is('parent_id', null)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(limit + 1);
+
+        const decoded = decodeFeedCursor(cursor);
+        if (decoded) {
+          query = query.or(
+            `created_at.lt.${decoded.created_at},and(created_at.eq.${decoded.created_at},id.lt.${decoded.id})`
+          );
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          handlePostsError('fetchFeedPosts', error);
+        } else if (data) {
+          const rows = data as unknown as PostWithAuthor[];
+          const hasMore = rows.length > limit;
+          const sliced = hasMore ? rows.slice(0, limit) : rows;
+          const nextCursor = hasMore && sliced.length > 0 ? encodeFeedCursor(sliced[sliced.length - 1]) : null;
+          return {
+            posts: sliced,
+            nextCursor,
+            hasMore,
+          };
+        }
+      } catch (err) {
+        handlePostsError('fetchFeedPosts', err);
+      }
+    }
+
+    return localDb.fetchFeedPosts(options);
+  },
+
+  async createPost(input: CreatePostInput): Promise<PostWithAuthor> {
+    const trimmed = (input.body || '').trim();
+    if (!trimmed || trimmed.length > 500) {
+      throw new Error('Post body must be between 1 and 500 characters');
+    }
+    if (!input.author_profile_id) {
+      throw new Error('author_profile_id is required');
+    }
+
+    // The embed (or the LocalDB mirror) can miss the author row, which
+    // made fresh posts render as "Member". Resolve it directly so a
+    // just-posted card always shows the real name and @username.
+    const withAuthor = async (post: PostWithAuthor): Promise<PostWithAuthor> => {
+      if (post.author_profile?.username) return post;
+      const p = await this.getProfile(input.author_profile_id);
+      if (!p) return post;
+      return {
+        ...post,
+        author_profile: {
+          id: p.id,
+          username: p.username,
+          profilename: p.profilename || p.name || null,
+        },
+      };
+    };
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .insert({
+            body: trimmed,
+            author_profile_id: input.author_profile_id,
+            author_agent_id: null,
+            parent_id: null,
+          })
+          .select(POSTS_EMBED_QUERY)
+          .single();
+
+        if (error) {
+          handlePostsError('createPost', error);
+          // Only a missing remote table may degrade to a local post.
+          // Real failures (RLS, network) must surface, otherwise the
+          // user believes a local-only post was published.
+          if (!isPgrstMissingTable(error)) {
+            throw new Error(error.message || 'Unable to share post. Please try again.');
+          }
+        } else if (data) {
+          const createdPost = data as unknown as PostWithAuthor;
+          // Keep LocalDB in sync
+          localDb.createPost({
+            id: createdPost.id,
+            body: trimmed,
+            author_profile_id: input.author_profile_id,
+            created_at: createdPost.created_at,
+          });
+          return withAuthor(createdPost);
+        }
+      } catch (err) {
+        handlePostsError('createPost', err);
+        if (!isPgrstMissingTable(err)) throw err;
+      }
+    }
+
+    return withAuthor(localDb.createPost(input));
+  },
+
+  async deletePost(postId: string, currentUserId: string): Promise<void> {
+    if (!postId || !currentUserId) return;
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        const { error } = await supabase
+          .from('posts')
+          .delete()
+          .eq('id', postId)
+          .eq('author_profile_id', currentUserId);
+
+        if (error) {
+          handlePostsError('deletePost', error);
+          // Only a missing remote table may degrade to a local delete.
+          // Otherwise surface the failure and keep the local copy, so
+          // a failed delete cannot look successful until reload.
+          if (!isPgrstMissingTable(error)) {
+            throw new Error(error.message || 'Failed to delete post.');
+          }
+        } else {
+          localDb.deletePost(postId, currentUserId);
+          return;
+        }
+      } catch (err) {
+        handlePostsError('deletePost', err);
+        if (!isPgrstMissingTable(err)) throw err;
+      }
+    }
+
+    localDb.deletePost(postId, currentUserId);
+  },
+
   // Account Deletion Helper
   async deleteAccount(userId: string): Promise<void> {
     if (isSupabaseConfigured && supabase) {
@@ -1104,3 +1500,71 @@ export function formatRelativeTime(dateString?: string | null): string {
   const diffDay = Math.floor(diffHour / 24);
   return `${diffDay}d ago`;
 }
+
+// Semantic feed timestamp helper per theme.md & R5
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+export function formatFeedTimestamp(dateInput?: string | Date | null): {
+  relative: string;
+  full: string;
+  iso: string;
+  clock: string;
+} {
+  if (!dateInput) {
+    return { relative: '', full: '', iso: '', clock: '' };
+  }
+
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    return { relative: '', full: '', iso: '', clock: '' };
+  }
+
+  const iso = date.toISOString();
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+
+  let relative: string;
+  if (diffSec < 60) {
+    relative = 'just now';
+  } else {
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) {
+      relative = `${diffMin}m`;
+    } else {
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) {
+        relative = `${diffHour}h`;
+      } else {
+        const month = MONTH_NAMES[date.getMonth()];
+        const day = date.getDate();
+        if (date.getFullYear() === now.getFullYear()) {
+          relative = `${month} ${day}`;
+        } else {
+          relative = `${month} ${day}, ${date.getFullYear()}`;
+        }
+      }
+    }
+  }
+
+  const full = date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const clock = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return { relative, full, iso, clock };
+}
+
