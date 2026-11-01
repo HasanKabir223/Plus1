@@ -22,7 +22,7 @@ alter table public.follows enable row level security;
 drop policy if exists "follows readable by logged in users" on public.follows;
 create policy "follows readable by logged in users"
   on public.follows for select
-  to authenticated
+  to authenticated, anon
   using (true);
 
 drop policy if exists "follow as yourself" on public.follows;
@@ -48,6 +48,10 @@ select
   (select count(*) from public.follows f where f.follower_id  = p.id)::int as following_count
 from public.profiles p;
 
--- 6. Grant permissions on the view to authenticated users
-grant select on public.profile_stats to authenticated;
+-- 6. Grant permissions on follows and profile_stats
+grant select on public.follows to authenticated, anon;
+grant select on public.profile_stats to authenticated, anon;
+
+-- 7. Force PostgREST to immediately refresh its schema cache
+notify pgrst, 'reload schema';
 

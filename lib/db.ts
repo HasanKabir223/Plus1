@@ -350,6 +350,50 @@ function isDummyProfileName(profilename?: string | null): boolean {
 }
 
 // Unified Database Access Layer API
+// Follows Remote Schema Capability State & Helpers
+let isFollowsRemoteAvailable: boolean | null = null;
+let lastFollowsRemoteCheck = 0;
+const FOLLOWS_RECHECK_INTERVAL_MS = 30_000;
+
+function isPgrstMissingTable(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; message?: string };
+  return (
+    e.code === 'PGRST205' ||
+    (typeof e.message === 'string' && e.message.toLowerCase().includes('schema cache'))
+  );
+}
+
+function handleFollowsError(operation: string, err: unknown): void {
+  if (isPgrstMissingTable(err)) {
+    isFollowsRemoteAvailable = false;
+    lastFollowsRemoteCheck = Date.now();
+    if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
+      const warnedKey = '__pgrst205_follows_notified__';
+      if (!(window as unknown as Record<string, boolean>)[warnedKey]) {
+        (window as unknown as Record<string, boolean>)[warnedKey] = true;
+        console.info(
+          '[plus1] Notice: Remote "public.follows" table is not yet in the Supabase schema cache. LocalDB fallback active.'
+        );
+      }
+    }
+    return;
+  }
+  console.warn(`Supabase ${operation} error, falling back:`, err);
+}
+
+function shouldAttemptRemoteFollows(): boolean {
+  if (!isSupabaseConfigured || !supabase) return false;
+  if (isFollowsRemoteAvailable === false) {
+    if (Date.now() - lastFollowsRemoteCheck > FOLLOWS_RECHECK_INTERVAL_MS) {
+      isFollowsRemoteAvailable = null;
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
 export const db = {
   // Profiles
   async getProfile(id: string): Promise<Profile | null> {
@@ -804,7 +848,7 @@ export const db = {
 
   // Follows & Profile Stats
   async queryProfileStats(profileId: string): Promise<ProfileStats> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldAttemptRemoteFollows() && supabase) {
       try {
         const { data, error } = await supabase
           .from('profile_stats')
@@ -812,7 +856,10 @@ export const db = {
           .eq('profile_id', profileId)
           .maybeSingle();
 
-        if (!error && data) {
+        if (error) {
+          handleFollowsError('queryProfileStats', error);
+        } else if (data) {
+          isFollowsRemoteAvailable = true;
           return {
             profile_id: data.profile_id,
             agent_count: Number(data.agent_count) || 0,
@@ -821,7 +868,7 @@ export const db = {
           };
         }
       } catch (err) {
-        console.warn('Supabase queryProfileStats error, falling back:', err);
+        handleFollowsError('queryProfileStats', err);
       }
     }
 
@@ -841,7 +888,7 @@ export const db = {
   async checkFollowStatus(followerId: string, followingId: string): Promise<boolean> {
     if (!followerId || !followingId || followerId === followingId) return false;
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldAttemptRemoteFollows() && supabase) {
       try {
         const { data, error } = await supabase
           .from('follows')
@@ -850,9 +897,14 @@ export const db = {
           .eq('following_id', followingId)
           .maybeSingle();
 
-        if (!error) return Boolean(data);
+        if (error) {
+          handleFollowsError('checkFollowStatus', error);
+        } else {
+          isFollowsRemoteAvailable = true;
+          return Boolean(data);
+        }
       } catch (err) {
-        console.warn('Supabase checkFollowStatus error, falling back:', err);
+        handleFollowsError('checkFollowStatus', err);
       }
     }
 
@@ -871,15 +923,19 @@ export const db = {
       throw new Error('Users cannot follow themselves');
     }
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldAttemptRemoteFollows() && supabase) {
       try {
         const { error } = await supabase
           .from('follows')
           .insert([{ follower_id: followerId, following_id: followingId }]);
-        if (error && error.code !== '23505') throw error;
-        return;
+        if (error && error.code !== '23505') {
+          handleFollowsError('followUser', error);
+        } else {
+          isFollowsRemoteAvailable = true;
+          return;
+        }
       } catch (err) {
-        console.warn('Supabase followUser error, falling back:', err);
+        handleFollowsError('followUser', err);
       }
     }
 
@@ -889,17 +945,21 @@ export const db = {
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
     if (!followerId || !followingId) return;
 
-    if (isSupabaseConfigured && supabase) {
+    if (shouldAttemptRemoteFollows() && supabase) {
       try {
         const { error } = await supabase
           .from('follows')
           .delete()
           .eq('follower_id', followerId)
           .eq('following_id', followingId);
-        if (error) throw error;
-        return;
+        if (error) {
+          handleFollowsError('unfollowUser', error);
+        } else {
+          isFollowsRemoteAvailable = true;
+          return;
+        }
       } catch (err) {
-        console.warn('Supabase unfollowUser error, falling back:', err);
+        handleFollowsError('unfollowUser', err);
       }
     }
 
@@ -907,14 +967,17 @@ export const db = {
   },
 
   async listFollowers(profileId: string): Promise<Profile[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldAttemptRemoteFollows() && supabase) {
       try {
         const { data, error } = await supabase
           .from('follows')
           .select('follower_id')
           .eq('following_id', profileId);
 
-        if (!error && data) {
+        if (error) {
+          handleFollowsError('listFollowers', error);
+        } else if (data) {
+          isFollowsRemoteAvailable = true;
           const followerIds = data.map((d) => d.follower_id);
           if (followerIds.length === 0) return [];
 
@@ -939,7 +1002,7 @@ export const db = {
           }
         }
       } catch (err) {
-        console.warn('Supabase listFollowers error, falling back:', err);
+        handleFollowsError('listFollowers', err);
       }
     }
 
@@ -955,14 +1018,17 @@ export const db = {
   },
 
   async listFollowing(profileId: string): Promise<Profile[]> {
-    if (isSupabaseConfigured && supabase) {
+    if (shouldAttemptRemoteFollows() && supabase) {
       try {
         const { data, error } = await supabase
           .from('follows')
           .select('following_id')
           .eq('follower_id', profileId);
 
-        if (!error && data) {
+        if (error) {
+          handleFollowsError('listFollowing', error);
+        } else if (data) {
+          isFollowsRemoteAvailable = true;
           const followingIds = data.map((d) => d.following_id);
           if (followingIds.length === 0) return [];
 
@@ -987,7 +1053,7 @@ export const db = {
           }
         }
       } catch (err) {
-        console.warn('Supabase listFollowing error, falling back:', err);
+        handleFollowsError('listFollowing', err);
       }
     }
 
