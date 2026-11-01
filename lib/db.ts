@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase/client';
-import type { Profile, Agent, Conversation, Message, InboxItem } from '@/types/database';
+import type { Profile, Agent, Conversation, Message, InboxItem, Follow, ProfileStats } from '@/types/database';
 
 // Initial DB seed data (loaded into storage on first run if not configured in remote Supabase)
 const INITIAL_PROFILES: Profile[] = [
@@ -165,10 +165,19 @@ const INITIAL_INBOX: InboxItem[] = [
   },
 ];
 
+const INITIAL_FOLLOWS: Follow[] = [];
+
 // Browser Local DB Storage Helper
 class LocalDB {
+  private memoryStore: Map<string, unknown> = new Map();
+
   private getStorage<T>(key: string, defaultData: T): T {
-    if (typeof window === 'undefined') return defaultData;
+    if (typeof window === 'undefined') {
+      if (!this.memoryStore.has(key)) {
+        this.memoryStore.set(key, JSON.parse(JSON.stringify(defaultData)));
+      }
+      return this.memoryStore.get(key) as T;
+    }
     try {
       const saved = localStorage.getItem(`plus1_${key}`);
       if (!saved) {
@@ -182,7 +191,10 @@ class LocalDB {
   }
 
   private setStorage<T>(key: string, data: T) {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+      this.memoryStore.set(key, data);
+      return;
+    }
     try {
       localStorage.setItem(`plus1_${key}`, JSON.stringify(data));
       window.dispatchEvent(new CustomEvent(`plus1_event_${key}`, { detail: data }));
@@ -231,6 +243,58 @@ class LocalDB {
     this.setStorage('inbox', data);
   }
 
+  getFollows(): Follow[] {
+    return this.getStorage('follows', INITIAL_FOLLOWS);
+  }
+
+  setFollows(data: Follow[]) {
+    this.setStorage('follows', data);
+  }
+
+  follow(followerId: string, followingId: string): boolean {
+    if (!followerId || !followingId || followerId === followingId) return false;
+    const follows = this.getFollows();
+    const exists = follows.some(
+      (f) => f.follower_id === followerId && f.following_id === followingId
+    );
+    if (!exists) {
+      const record: Follow = {
+        follower_id: followerId,
+        following_id: followingId,
+        created_at: new Date().toISOString(),
+      };
+      this.setFollows([...follows, record]);
+    }
+    return true;
+  }
+
+  unfollow(followerId: string, followingId: string): boolean {
+    const follows = this.getFollows();
+    const filtered = follows.filter(
+      (f) => !(f.follower_id === followerId && f.following_id === followingId)
+    );
+    if (filtered.length !== follows.length) {
+      this.setFollows(filtered);
+      return true;
+    }
+    return false;
+  }
+
+  isFollowing(followerId: string, followingId: string): boolean {
+    if (!followerId || !followingId) return false;
+    return this.getFollows().some(
+      (f) => f.follower_id === followerId && f.following_id === followingId
+    );
+  }
+
+  getFollowersCount(profileId: string): number {
+    return this.getFollows().filter((f) => f.following_id === profileId).length;
+  }
+
+  getFollowingCount(profileId: string): number {
+    return this.getFollows().filter((f) => f.follower_id === profileId).length;
+  }
+
   deleteAccount(userId: string) {
     const profiles = this.getProfiles().filter((p) => p.id !== userId);
     this.setProfiles(profiles);
@@ -253,6 +317,11 @@ class LocalDB {
     const remainingMessages = this.getMessages().filter((m) => remainingConvIds.has(m.conversation_id));
     this.setMessages(remainingMessages);
 
+    const remainingFollows = this.getFollows().filter(
+      (f) => f.follower_id !== userId && f.following_id !== userId
+    );
+    this.setFollows(remainingFollows);
+
     if (typeof window !== 'undefined') {
       const currentId = localStorage.getItem('plus1_session_user_id');
       if (currentId === userId) {
@@ -263,6 +332,7 @@ class LocalDB {
 }
 
 const localDb = new LocalDB();
+export { localDb, LocalDB };
 
 function isDummyUsername(username?: string | null): boolean {
   if (!username) return true;
@@ -730,6 +800,206 @@ export const db = {
     }
 
     return inboxItem;
+  },
+
+  // Follows & Profile Stats
+  async queryProfileStats(profileId: string): Promise<ProfileStats> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('profile_stats')
+          .select('*')
+          .eq('profile_id', profileId)
+          .maybeSingle();
+
+        if (!error && data) {
+          return {
+            profile_id: data.profile_id,
+            agent_count: Number(data.agent_count) || 0,
+            follower_count: Number(data.follower_count) || 0,
+            following_count: Number(data.following_count) || 0,
+          };
+        }
+      } catch (err) {
+        console.warn('Supabase queryProfileStats error, falling back:', err);
+      }
+    }
+
+    const agents = localDb.getAgents().filter((a) => a.owner_id === profileId);
+    return {
+      profile_id: profileId,
+      agent_count: agents.length,
+      follower_count: localDb.getFollowersCount(profileId),
+      following_count: localDb.getFollowingCount(profileId),
+    };
+  },
+
+  async getProfileStats(profileId: string): Promise<ProfileStats> {
+    return this.queryProfileStats(profileId);
+  },
+
+  async checkFollowStatus(followerId: string, followingId: string): Promise<boolean> {
+    if (!followerId || !followingId || followerId === followingId) return false;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('follower_id', followerId)
+          .eq('following_id', followingId)
+          .maybeSingle();
+
+        if (!error) return Boolean(data);
+      } catch (err) {
+        console.warn('Supabase checkFollowStatus error, falling back:', err);
+      }
+    }
+
+    return localDb.isFollowing(followerId, followingId);
+  },
+
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    return this.checkFollowStatus(followerId, followingId);
+  },
+
+  async followUser(followerId: string, followingId: string): Promise<void> {
+    if (!followerId || !followingId) {
+      throw new Error('Follower ID and Following ID are required');
+    }
+    if (followerId === followingId) {
+      throw new Error('Users cannot follow themselves');
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('follows')
+          .insert([{ follower_id: followerId, following_id: followingId }]);
+        if (error && error.code !== '23505') throw error;
+        return;
+      } catch (err) {
+        console.warn('Supabase followUser error, falling back:', err);
+      }
+    }
+
+    localDb.follow(followerId, followingId);
+  },
+
+  async unfollowUser(followerId: string, followingId: string): Promise<void> {
+    if (!followerId || !followingId) return;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('follows')
+          .delete()
+          .eq('follower_id', followerId)
+          .eq('following_id', followingId);
+        if (error) throw error;
+        return;
+      } catch (err) {
+        console.warn('Supabase unfollowUser error, falling back:', err);
+      }
+    }
+
+    localDb.unfollow(followerId, followingId);
+  },
+
+  async listFollowers(profileId: string): Promise<Profile[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', profileId);
+
+        if (!error && data) {
+          const followerIds = data.map((d) => d.follower_id);
+          if (followerIds.length === 0) return [];
+
+          const { data: profiles, error: pErr } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', followerIds);
+
+          if (!pErr && profiles) {
+            return profiles.map((p) => {
+              const username = (p.username || '').trim();
+              const profilename = (p.profilename || p.name || '').trim();
+              const name = profilename || username;
+              return {
+                ...p,
+                username,
+                name,
+                profilename: name,
+                handle: p.handle || username,
+              } as Profile;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase listFollowers error, falling back:', err);
+      }
+    }
+
+    const follows = localDb.getFollows().filter((f) => f.following_id === profileId);
+    const followerIds = new Set(follows.map((f) => f.follower_id));
+    return localDb
+      .getProfiles()
+      .filter((p) => followerIds.has(p.id));
+  },
+
+  async getFollowers(profileId: string): Promise<Profile[]> {
+    return this.listFollowers(profileId);
+  },
+
+  async listFollowing(profileId: string): Promise<Profile[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', profileId);
+
+        if (!error && data) {
+          const followingIds = data.map((d) => d.following_id);
+          if (followingIds.length === 0) return [];
+
+          const { data: profiles, error: pErr } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', followingIds);
+
+          if (!pErr && profiles) {
+            return profiles.map((p) => {
+              const username = (p.username || '').trim();
+              const profilename = (p.profilename || p.name || '').trim();
+              const name = profilename || username;
+              return {
+                ...p,
+                username,
+                name,
+                profilename: name,
+                handle: p.handle || username,
+              } as Profile;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase listFollowing error, falling back:', err);
+      }
+    }
+
+    const follows = localDb.getFollows().filter((f) => f.follower_id === profileId);
+    const followingIds = new Set(follows.map((f) => f.following_id));
+    return localDb
+      .getProfiles()
+      .filter((p) => followingIds.has(p.id));
+  },
+
+  async getFollowing(profileId: string): Promise<Profile[]> {
+    return this.listFollowing(profileId);
   },
 
   // Account Deletion Helper

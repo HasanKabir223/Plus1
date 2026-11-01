@@ -84,6 +84,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [isTogglingFollow, setIsTogglingFollow] = useState(false);
 
   // Edit profile modal state (owner only)
   const [isEditing, setIsEditing] = useState(false);
@@ -118,14 +119,38 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         setEditBio(p.bio || '');
         setEditTags(p.looking_for || []);
 
-        // Zero baseline for followers and following - strictly no fake or hardcoded metrics
-        const followKey = `plus1_follow_${p.id}`;
-        const userFollows =
-          typeof window !== 'undefined' &&
-          Boolean(user && user.id !== p.id && localStorage.getItem(followKey) === 'true');
-        setIsFollowing(userFollows);
-        setFollowersCount(userFollows ? 1 : 0);
-        setFollowingCount(0);
+        // Live metrics & follow status from db - strictly 0 baseline for empty accounts
+        try {
+          const stats = await db.getProfileStats(p.id);
+          if (isMounted && stats) {
+            setFollowersCount(stats.follower_count ?? 0);
+            setFollowingCount(stats.following_count ?? 0);
+          }
+        } catch (statsErr) {
+          console.warn('Failed to fetch profile stats:', statsErr);
+          if (isMounted) {
+            setFollowersCount(0);
+            setFollowingCount(0);
+          }
+        }
+
+        if (user && user.id !== p.id) {
+          try {
+            const userFollows = await db.isFollowing(user.id, p.id);
+            if (isMounted) {
+              setIsFollowing(userFollows);
+            }
+          } catch (followErr) {
+            console.warn('Failed to check follow status:', followErr);
+            if (isMounted) {
+              setIsFollowing(false);
+            }
+          }
+        } else {
+          if (isMounted) {
+            setIsFollowing(false);
+          }
+        }
 
         const userAgents = await db.getAgentsByOwner(p.id);
         if (!isMounted) return;
@@ -182,19 +207,44 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditing]);
 
-  const handleToggleFollow = () => {
+  const handleToggleFollow = async () => {
     if (!user) {
       router.push('/login');
       return;
     }
-    if (!profile || isOwner) return;
-    const followKey = `plus1_follow_${profile.id}`;
-    const next = !isFollowing;
-    setIsFollowing(next);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(followKey, String(next));
+    if (!profile || isOwner || user.id === profile.id || isTogglingFollow) return;
+
+    setIsTogglingFollow(true);
+    const previousFollowing = isFollowing;
+    const previousCount = followersCount;
+
+    // Optimistic UI update
+    const nextFollowing = !previousFollowing;
+    setIsFollowing(nextFollowing);
+    setFollowersCount((prev) => (nextFollowing ? prev + 1 : Math.max(0, prev - 1)));
+
+    try {
+      if (nextFollowing) {
+        await db.followUser(user.id, profile.id);
+      } else {
+        await db.unfollowUser(user.id, profile.id);
+      }
+
+      // Sync fresh live stats from database
+      const freshStats = await db.getProfileStats(profile.id);
+      if (freshStats) {
+        setFollowersCount(freshStats.follower_count);
+        setFollowingCount(freshStats.following_count);
+      }
+    } catch (err: unknown) {
+      console.error('Failed to update follow status:', err);
+      // Rollback optimistic state
+      setIsFollowing(previousFollowing);
+      setFollowersCount(previousCount);
+      alert(err instanceof Error ? err.message : 'Failed to update follow status. Please try again.');
+    } finally {
+      setIsTogglingFollow(false);
     }
-    setFollowersCount((prev) => (next ? prev + 1 : Math.max(0, prev - 1)));
   };
 
   const handleSaveProfile = async (e?: React.FormEvent) => {
@@ -459,6 +509,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                   <button
                     type="button"
                     onClick={handleToggleFollow}
+                    disabled={isTogglingFollow}
                     className={isFollowing ? styles.followingBtn : styles.followBtn}
                   >
                     {isFollowing ? (

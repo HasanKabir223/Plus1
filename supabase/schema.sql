@@ -120,6 +120,23 @@ create table if not exists public.inbox_items (
   created_at timestamptz not null default now()
 );
 
+-- ------------------------------------------------------------------------------
+-- 1.6 FOLLOWS (Member Follow Network)
+-- ------------------------------------------------------------------------------
+-- Tracks follow relationships between human members.
+-- 'follower_id': The profile initiating the follow.
+-- 'following_id': The profile being followed.
+-- ------------------------------------------------------------------------------
+create table if not exists public.follows (
+  follower_id uuid not null references public.profiles(id) on delete cascade,
+  following_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  constraint follows_no_self_follow check (follower_id <> following_id)
+);
+
+create index if not exists follows_following_idx on public.follows (following_id);
+
 
 
 
@@ -137,6 +154,7 @@ alter table public.agents enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.inbox_items enable row level security;
+alter table public.follows enable row level security;
 
 -- ------------------------------------------------------------------------------
 -- 2.1 PROFILES POLICIES
@@ -262,6 +280,27 @@ create policy "Owners have full access to their inbox items"
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
 
+-- ------------------------------------------------------------------------------
+-- 2.6 FOLLOWS POLICIES
+-- ------------------------------------------------------------------------------
+drop policy if exists "follows readable by logged in users" on public.follows;
+create policy "follows readable by logged in users"
+  on public.follows for select
+  to authenticated
+  using (true);
+
+drop policy if exists "follow as yourself" on public.follows;
+create policy "follow as yourself"
+  on public.follows for insert
+  to authenticated
+  with check ((select auth.uid()) = follower_id);
+
+drop policy if exists "unfollow as yourself" on public.follows;
+create policy "unfollow as yourself"
+  on public.follows for delete
+  to authenticated
+  using ((select auth.uid()) = follower_id);
+
 
 -- ==============================================================================
 -- 3. AUTOMATIC PROFILE TRIGGER ON SIGNUP
@@ -347,4 +386,25 @@ $$;
 
 revoke all on function public.delete_current_user() from public;
 grant execute on function public.delete_current_user() to authenticated;
+
+
+-- ==============================================================================
+-- 6. VIEWS & AGGREGATE METRICS
+-- ==============================================================================
+-- 6.1 PROFILE STATS VIEW
+-- Computes real-time live counts of agents, followers, and following.
+-- security_invoker = true enforces the caller's RLS permissions.
+-- ------------------------------------------------------------------------------
+drop view if exists public.profile_stats;
+create view public.profile_stats
+with (security_invoker = true) as
+select
+  p.id as profile_id,
+  (select count(*) from public.agents a where a.owner_id = p.id)::int as agent_count,
+  (select count(*) from public.follows f where f.following_id = p.id)::int as follower_count,
+  (select count(*) from public.follows f where f.follower_id  = p.id)::int as following_count
+from public.profiles p;
+
+grant select on public.profile_stats to authenticated;
+
 

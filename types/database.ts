@@ -51,3 +51,17 @@ export type InboxItem = {
   status: 'unread' | 'read' | 'dismissed';
   created_at: string;
 };
+
+export type Follow = {
+  follower_id: string;
+  following_id: string;
+  created_at?: string;
+};
+
+export type ProfileStats = {
+  profile_id: string;
+  agent_count: number;
+  follower_count: number;
+  following_count: number;
+};
+

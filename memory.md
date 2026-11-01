@@ -99,10 +99,13 @@ plus1/
 │       ├── 20261029_004_cascade_delete.sql
 │       ├── 20261030_refactor_profiles_schema.sql
 │       ├── 20261031_remove_dummy_profile_defaults.sql
-│       └── 20261031_account_deletion.sql
+│       ├── 20261031_account_deletion.sql
+│       └── 20261101_follows_and_profile_stats.sql
 └── scripts/
     ├── test-onboarding-logic.mjs       # Comprehensive unit tests for onboarding & route guard logic
-    └── test-account-deletion.mjs       # Comprehensive unit and integration tests for account deletion
+    ├── test-account-deletion.mjs       # Comprehensive unit and integration tests for account deletion
+    ├── test-follows.mjs                # Unit tests for followers/following logic and schema validation
+    └── test-follows-stress.mjs         # Stress and concurrency tests for social graph operations
 ```
 
 ---
@@ -120,6 +123,10 @@ plus1/
 ### 5.2 Key Triggers & Cascades
 - **`handle_new_user()`**: Trigger on `auth.users` `AFTER INSERT`. Inserts an empty profile record (`id = new.id`, `username = NULL`, `profilename = NULL`). Never inserts hardcoded dummy values like "New Member" or "user_xxxx".
 - **Cascades**: Deleting a user row from `auth.users` automatically cascades to delete `public.profiles`, all owned `public.agents`, conversation records, and inbox notifications.
+
+### 5.3 `public.follows` & `public.profile_stats`
+- **`public.follows`**: `follower_id` (UUID references profiles.id ON DELETE CASCADE), `following_id` (UUID references profiles.id ON DELETE CASCADE), PK `(follower_id, following_id)`, check `follower_id <> following_id`, index `follows_following_idx (following_id)`. RLS enabled with select for authenticated, insert with check `(auth.uid() = follower_id)`, delete using `(auth.uid() = follower_id)`.
+- **`public.profile_stats`**: View with `security_invoker = true` computing live `profile_id`, `agent_count`, `follower_count`, and `following_count` directly from profiles, agents, and follows tables. Never stores stale counts.
 
 ---
 
@@ -179,6 +186,7 @@ flowchart TD
 | 2026-10-31 | Onboarding Flow & Dummy Fallback Removal | Eliminated hardcoded 'New Member' and 'user_xxxx' dummy defaults from `handle_new_user()` trigger and DB schema (`20261031_remove_dummy_profile_defaults.sql`). New profiles start with NULL `username` and `profilename`. Updated `proxy.ts`, `auth-context.tsx`, `db.ts`, and `onboarding/page.tsx` so un-onboarded users are strictly forced to `/onboarding`, only custom inputs mark profile as onboarded, and upon completion redirect to `/`. Fixed `isDummyProfileName` to reject empty/whitespace profile names, aligned SQL trigger with `NULLIF(TRIM(...), '')` to prevent CHECK constraint violations, cleaned `INITIAL_PROFILES` seed data, filtered un-onboarded profiles from Explore search, and closed fallback `signIn` account creation hole. | Implemented |
 | 2026-10-31 | Profile & Auth Deletion Restoration | Fixed account deletion failure where `auth.users` and `public.profiles` rows were not removed. Re-introduced server-side admin client in `lib/supabase/server.ts` utilizing `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY` strictly in route handler (`app/api/account/delete/route.ts`). Explicitly delete from `public.profiles` via admin client (bypassing RLS) and permanently delete auth user via `adminClient.auth.admin.deleteUser(user.id)`. Added fallback to `public.delete_current_user()` RPC and client-side `profiles_delete_own` RLS policy (`20261031_account_deletion.sql`). Added `deleteAccount` to `LocalDB` in `lib/db.ts` to ensure cascades work in local offline development, and wrapped client `signOut` to gracefully swallow any post-deletion invalid session exceptions. Verified with automated live test `scripts/test-account-deletion.mjs`. | Implemented |
 | 2026-11-01 | Profile Wireframe Redesign & Zero-Metric Rule | Redesigned profile page from Twitter/X clone to custom centered Plus1 wireframe: centered circular avatar with first 2 characters of display name in uppercase, bold centered display name, centered @username, bio, tags, and metrics bar (agents, following, followers). Placed '+ Deploy agent' beside 'Edit profile', removed verified badges, removed Twitter interaction bars, and enforced strictly 0 for unbacked follower metrics (banning synthetic/mocked numbers across project rules). | Implemented |
+| 2026-11-01 | Followers & Following Architecture | Implemented real followers and following social graph subsystem. Created `public.follows` table with composite PK, self-follow check constraint, index on `following_id`, and authenticated RLS policies. Created `public.profile_stats` view with `security_invoker = true` computing live follower, following, and agent counts. Updated `types/database.ts` and `lib/db.ts` with Supabase PostgREST client methods and seamless LocalDB offline fallback. Connected profile UI (`app/u/[handle]/page.tsx`) with real follow/unfollow toggle, self-follow prevention, optimistic updates, and error rollback. Verified with `scripts/test-follows.mjs`, adversarial stress harness `scripts/test-follows-stress.mjs`, and clean Next.js 16 production build. | Implemented |
 
 ---
 
@@ -187,5 +195,6 @@ flowchart TD
 - **Remote Database Sync**: To ensure the cloud Supabase instance matches local schema, execute the SQL migrations in the Supabase Dashboard SQL Editor:
   1. `supabase/migrations/20261031_remove_dummy_profile_defaults.sql` (dummy fallback removal)
   2. `supabase/migrations/20261031_account_deletion.sql` (RLS delete policy and cascade RPC)
+  3. `supabase/migrations/20261101_follows_and_profile_stats.sql` (follows table, RLS, and profile_stats view)
 - **Email Confirmation**: Must remain toggled **OFF** in Supabase Dashboard (**Authentication &rarr; Providers &rarr; Email**) so signups log in immediately and proceed directly to `/onboarding`.
 - **Domain & Deployment**: Ready for Vercel deployment with Next.js 16 App Router and Turbopack.
