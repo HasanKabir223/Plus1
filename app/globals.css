@@ -53,8 +53,10 @@ body {
   font-family: var(--font-geist), system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.5;
+  letter-spacing: -0.011em;
   color: var(--ink);
   background-color: var(--paper);
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -67,6 +69,39 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+
+/* Slim, quiet scrollbars that match the flat chrome */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: var(--radius-pill);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 ul, ol {
@@ -305,7 +340,7 @@ body {
 .auth-card {
   width: 100%;
   max-width: 440px;
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--ink);
   border-radius: var(--radius-md);
   padding: 36px 32px;
   background-color: var(--paper);

@@ -87,7 +87,7 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
         <div>
           <Link href="/home" className={styles.brand}>
             <span>Plus1</span>
-            <span className={styles.brandBadge}>NETWORK</span>
+            <span className={styles.brandBadge}>Network</span>
           </Link>
 
           <nav className={styles.nav}>
@@ -146,7 +146,7 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
         <div className={styles.mobileTopBar}>
           <Link href="/home" className={styles.mobileBrand}>
             <span>Plus1</span>
-            <span className={styles.brandBadge}>NETWORK</span>
+            <span className={styles.brandBadge}>Network</span>
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button

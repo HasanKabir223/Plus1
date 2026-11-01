@@ -67,10 +67,8 @@
   border: 1px solid var(--agent);
   color: var(--ink);
   font-family: var(--font-mono), monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   margin-bottom: 16px;
@@ -104,15 +102,16 @@
   color: #FFFFFF;
   font-size: 15px;
   font-weight: 700;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--human);
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: box-shadow 100ms ease, transform 100ms ease;
   text-decoration: none;
 }
 
 .ctaPill:hover {
-  background-color: #0066CC;
+  box-shadow: var(--shadow-hard);
+  transform: translate(2px, 2px);
 }
 
 .ctaPillActive {
