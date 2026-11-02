@@ -62,11 +62,16 @@ plus1/
 │   ├── threads/[id]/page.tsx           # Live agent-to-agent conversation thread viewer
 │   ├── boost/page.tsx                  # Plus1 Network Boost & verification upgrade screen
 │   ├── u/[handle]/
-│   │   ├── page.tsx                    # Centered user profile (pfp, display name, username, bio, agents)
-│   │   └── profile.module.css          # Profile styles (flat tokens, zero gradients, centered hero)
+│   │   ├── page.tsx                    # Centered user profile (pfp, display name, username, bio, tags, Posts/Agents/Activity/About tabs)
+│   │   └── profile.module.css          # Profile styles (flat tokens, zero gradients, centered hero, sticky tabs)
 │   └── api/
 │       └── account/delete/route.ts     # User account deletion endpoint (Admin client auth.admin.deleteUser + RLS/RPC)
 ├── components/
+│   ├── feed/
+│   │   ├── feed-list.tsx               # Timeline feed with cursor pagination, skeleton/error/empty states
+│   │   ├── post-card.tsx               # Post row (human circle avatar vs agent square, delete own post)
+│   │   ├── post-composer.tsx           # 500-char composer, session-derived author, Cmd/Ctrl+Enter submit
+│   │   └── feed.module.css             # Feed styles (flat tokens only)
 │   ├── AppShell.tsx                    # Twitter/X style navigation rail & sidebar layout
 │   ├── AppShell.module.css
 │   ├── Navbar.tsx                      # Public & auth-aware navigation bar (dark variant on `/`)
@@ -87,13 +92,13 @@ plus1/
 ├── app/loading.tsx + per-route loading.tsx (home, explore, u/[handle], agents/[id], threads/[id])
 ├── lib/
 │   ├── auth-context.tsx                # React Auth Context (session, user, profile, signUp, signIn, signOut)
-│   ├── db.ts                           # Unified database API layer (Supabase PostgREST + local storage fallback)
+│   ├── db.ts                           # Unified database API layer (Supabase PostgREST + local storage fallback; incl. fetchPostsByProfile)
 │   └── supabase/
 │       ├── client.ts                   # createBrowserClient (@supabase/ssr, anon key only)
 │       └── server.ts                   # createServerClient with cookies (@supabase/ssr, anon key only)
 ├── proxy.ts                            # Next.js 16 server-side route guard (middleware convention)
 ├── next.config.ts                      # Next.js configuration + /signin -> /login redirect
-├── types/database.ts                   # TypeScript data models (Profile, Agent, Conversation, Message, Inbox)
+├── types/database.ts                   # TypeScript data models (Profile, Agent, Conversation, Message, Inbox, Post/PostWithAuthor)
 ├── supabase/
 │   ├── schema.sql                      # Base schema & idempotency definitions
 │   └── migrations/
@@ -205,13 +210,15 @@ Enforcement is split: the proxy only separates logged-out from logged-in (fast, 
 | 2026-11-02 | Landing Redesign (split hero, dark ASCII, pill buttons) | Rebuilt landing: split hero (copy + live agent-inbox preview), deep-navy WebGL ASCII backdrop lazy-loaded via `HeroAscii` (`next/dynamic`, `ssr: false`), dark navy navbar variant on `/` for a seamless band, full-bleed nav flush to corners, eyebrow pill and corner labels removed, Network match `%` replaced with fit labels, UseCases cards converted to divider rows, ink Ticker strip, pill buttons site-wide (`theme.md` radius scale updated). | Implemented |
 | 2026-11-02 | Proxy Perf Fix (route transitions) | Root-caused multi-second `proxy.ts` timings (1.6–6.7s per navigation) to the per-request `profiles` query. Proxy now: no-cookie fast path (zero Supabase calls), `getUser()` verification only, no database lookup; onboarding gating moved to `AuthProvider` (which already enforced it). Added `loading.tsx` skeletons for home/explore/profile/agent/thread + global fallback, `data-scroll-behavior="smooth"` in layout. Verified with `scripts/test-proxy-perf.mjs` + updated `scripts/test-onboarding-logic.mjs`, clean build. | Implemented |
 | 2026-11-02 | Commits `3c1588c` + `23d8432` | Committed proxy/perf/loading work and landing restyle. Note: `3c1588c` accidentally swept in `app/home/page.tsx` (another agent's in-progress feed-tab work) via a broad `app` pathspec — worktree untouched, needs reassignment, not a revert. `test-onboarding-logic.mjs` updates live only in the worktree (file is gitignored). Feed-module build fix (duplicate `handleLoadMore` in `components/feed/feed-list.tsx`) also left uncommitted with that agent's work. | Implemented |
+| 2026-11-02 | Profile Posts tab + hero restructure (`f0c5dab`) | Profile now surfaces uploaded content: new default **Posts** tab (owner composer on top, `PostCard` list, loading/error-retry/honest empty states, live refresh via `posts` subscription). New `db.fetchPostsByProfile` (Supabase + LocalDB fallback, top-level posts newest-first). Hero: Boosted badge, joined-date line, 4-stat metrics row (Posts/ Agents tappable tab switches; Following/Followers static — old `/explore` links removed as misleading). Tabs sticky. Zero-metric rule kept; theme tokens only; `tsc`, `eslint`, `next build` all clean. | Implemented |
 
 ---
 
 ## 8. Open Decisions & Notes
 
 - **Route performance**: dev logs showed `proxy.ts` at 1.6–6.7s per navigation; root cause was the per-request `profiles` query. After the fix, logged-out traffic makes zero Supabase calls; logged-in traffic pays one `getUser()` call. Restart `npm run dev` to pick up proxy changes.
-- **In-progress sibling work (uncommitted at time of writing)**: home feed tab (`app/home/page.tsx`, `app/home/home.module.css`), `components/feed/` module, challenger scripts, posts migration `20261102_posts_schema_and_rls.sql`, schema/type updates.
+- **In-progress sibling work (uncommitted at time of writing)**: home feed tab (`app/home/page.tsx`, `app/home/home.module.css`), challenger scripts (`scripts/test-challenger-*.mjs`, `scripts/challenger-*-results.json`, `scripts/ts-loader.mjs`), posts migration `20261102_posts_schema_and_rls.sql`, schema/type updates. Profile Posts-tab work is committed (`f0c5dab`); `components/feed/` module it reuses is still uncommitted sibling work.
+- **PRD Draft 2**: `PRD.md` worktree update (posts/feed/chat scope, Muse Spark backend, milestone replan) committed separately from code — verify its claims against the tree before treating them as built.
 - **Remote Database Sync**:
   - `public.follows` and `public.profile_stats` are **applied and verified** on the hosted Supabase database (`uncybsyfxfdqehmcuvcd`).
   - Migration versions `20261101` and `20261030` are marked as `applied` in `supabase_migrations.schema_migrations`.
