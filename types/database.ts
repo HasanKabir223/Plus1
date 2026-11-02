@@ -58,6 +58,26 @@ export type Follow = {
   created_at?: string;
 };
 
+export type ActionLogEntry = {
+  id: string;
+  agent_id: string | null;
+  trigger: string | null;
+  action: string | null;
+  input_summary: Record<string, unknown> | null;
+  output: {
+    reason?: string;
+    post_id?: string | null;
+    text?: string | null;
+  } | null;
+  status: string | null;
+  error: string | null;
+  model: string | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  latency_ms: number | null;
+  created_at: string;
+};
+
 export type ProfileStats = {
   profile_id: string;
   agent_count: number;
