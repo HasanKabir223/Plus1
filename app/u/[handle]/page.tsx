@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
-import type { Profile, Agent, Conversation } from '@/types/database';
+import type { Profile, Agent, Conversation, PostWithAuthor } from '@/types/database';
+import PostCard from '@/components/feed/post-card';
+import PostComposer from '@/components/feed/post-composer';
 import styles from './profile.module.css';
 import {
   ArrowLeft,
@@ -24,6 +26,9 @@ import {
   MessageSquare,
   ArrowRight,
   Shield,
+  FileText,
+  CalendarDays,
+  RotateCw,
 } from 'lucide-react';
 
 /**
@@ -74,8 +79,13 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [error, setError] = useState<string | null>(null);
   const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
 
-  // Sub-tabs: 'agents' | 'activity' | 'about'
-  const [activeTab, setActiveTab] = useState<'agents' | 'activity' | 'about'>('agents');
+  // Sub-tabs: 'posts' | 'agents' | 'activity' | 'about'
+  const [activeTab, setActiveTab] = useState<'posts' | 'agents' | 'activity' | 'about'>('posts');
+
+  // Uploaded content: posts authored by this profile
+  const [posts, setPosts] = useState<PostWithAuthor[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState<string | null>(null);
 
   // Network Boost status (from /boost activation)
   const [isBoosted, setIsBoosted] = useState(false);
@@ -152,6 +162,25 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           }
         }
 
+        try {
+          if (isMounted) {
+            setPostsLoading(true);
+            setPostsError(null);
+          }
+          const profilePosts = await db.fetchPostsByProfile(p.id, 50);
+          if (isMounted) {
+            setPosts(profilePosts || []);
+            setPostsLoading(false);
+          }
+        } catch (postsErr) {
+          console.warn('Failed to fetch profile posts:', postsErr);
+          if (isMounted) {
+            setPosts([]);
+            setPostsError('Could not load posts. Please try again.');
+            setPostsLoading(false);
+          }
+        }
+
         const userAgents = await db.getAgentsByOwner(p.id);
         if (!isMounted) return;
         const visibleAgents = user && user.id === p.id
@@ -206,6 +235,22 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditing]);
+
+  // Refresh uploaded posts when the feed store changes (own composer, deletes)
+  useEffect(() => {
+    if (!profile?.id) return;
+    const profileId = profile.id;
+    const refreshPosts = async () => {
+      try {
+        const profilePosts = await db.fetchPostsByProfile(profileId, 50);
+        setPosts(profilePosts || []);
+        setPostsError(null);
+      } catch {
+        // Keep existing posts on background refresh failure
+      }
+    };
+    return db.subscribe('posts', refreshPosts);
+  }, [profile?.id]);
 
   const handleToggleFollow = async () => {
     if (!user) {
@@ -288,6 +333,29 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
 
   const removeTag = (tag: string) => {
     setEditTags(editTags.filter((t) => t !== tag));
+  };
+
+  const handlePostCreated = (newPost: PostWithAuthor) => {
+    setPosts((prev) => [newPost, ...prev]);
+    setPostsError(null);
+  };
+
+  const handlePostDeleted = (deletedPostId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== deletedPostId));
+  };
+
+  const handleRetryPosts = async () => {
+    if (!profile) return;
+    try {
+      setPostsLoading(true);
+      setPostsError(null);
+      const profilePosts = await db.fetchPostsByProfile(profile.id, 50);
+      setPosts(profilePosts || []);
+    } catch {
+      setPostsError('Could not load posts. Please try again.');
+    } finally {
+      setPostsLoading(false);
+    }
   };
 
   const handleQuickRun = async (agentId: string) => {
@@ -416,6 +484,11 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           <div className={styles.heroInfo}>
             <div className={styles.displayNameRow}>
               <h1 className={styles.displayNameText}>{displayName.trim()}</h1>
+              {isBoosted && (
+                <span className={styles.boostBadge} title="Boosted node with priority indexing">
+                  Boosted
+                </span>
+              )}
             </div>
 
             <div className={styles.usernameText}>@{profile.username}</div>
@@ -441,13 +514,32 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
               </div>
             )}
 
-            {/* Metrics Row: Followers and Following beside the Agents */}
+            <div className={styles.metaLine}>
+              <CalendarDays size={13} aria-hidden="true" />
+              <span>Joined {formatJoinedDate(profile.created_at)}</span>
+            </div>
+
+            {/* Metrics Row: uploaded posts, agents, following, followers */}
             <div className={styles.metricsBar}>
+              <button
+                type="button"
+                onClick={() => setActiveTab('posts')}
+                className={`${styles.metricItem} ${activeTab === 'posts' ? styles.metricItemActive : ''}`}
+                title="View uploaded posts"
+                aria-pressed={activeTab === 'posts'}
+              >
+                <span className={styles.metricValue}>{posts.length}</span>
+                <span className={styles.metricLabel}>{posts.length === 1 ? 'Post' : 'Posts'}</span>
+              </button>
+
+              <div className={styles.metricDivider} />
+
               <button
                 type="button"
                 onClick={() => setActiveTab('agents')}
                 className={`${styles.metricItem} ${activeTab === 'agents' ? styles.metricItemActive : ''}`}
                 title="View deployed agents"
+                aria-pressed={activeTab === 'agents'}
               >
                 <span className={styles.metricValue}>{agents.length}</span>
                 <span className={styles.metricLabel}>{agents.length === 1 ? 'Agent' : 'Agents'}</span>
@@ -455,25 +547,23 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
 
               <div className={styles.metricDivider} />
 
-              <Link
-                href="/explore"
-                className={styles.metricLink}
-                title="Browse network following"
+              <div
+                className={styles.metricStatic}
+                title={isOwner ? 'Profiles you follow' : `Profiles ${displayName.trim()} follows`}
               >
                 <span className={styles.metricValue}>{followingCount}</span>
                 <span className={styles.metricLabel}>Following</span>
-              </Link>
+              </div>
 
               <div className={styles.metricDivider} />
 
-              <Link
-                href="/explore"
-                className={styles.metricLink}
-                title="Browse network followers"
+              <div
+                className={styles.metricStatic}
+                title={isOwner ? 'Profiles following you' : `Profiles following ${displayName.trim()}`}
               >
                 <span className={styles.metricValue}>{followersCount}</span>
                 <span className={styles.metricLabel}>Followers</span>
-              </Link>
+              </div>
             </div>
 
             {/* Action Buttons Row */}
@@ -540,6 +630,18 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
           <button
             type="button"
             role="tab"
+            aria-selected={activeTab === 'posts'}
+            onClick={() => setActiveTab('posts')}
+            className={`${styles.tabItem} ${activeTab === 'posts' ? styles.tabItemActive : ''}`}
+          >
+            <FileText size={16} />
+            <span>Posts ({posts.length})</span>
+            {activeTab === 'posts' && <div className={styles.tabIndicator} />}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
             aria-selected={activeTab === 'agents'}
             onClick={() => setActiveTab('agents')}
             className={`${styles.tabItem} ${activeTab === 'agents' ? styles.tabItemActive : ''}`}
@@ -573,6 +675,72 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
             {activeTab === 'about' && <div className={styles.tabIndicator} />}
           </button>
         </div>
+
+        {/* Tab 0: Uploaded Posts */}
+        {activeTab === 'posts' && (
+          <div className={styles.tabContent}>
+            {isOwner && (
+              <div className={styles.postsComposerWrap}>
+                <PostComposer onPostCreated={handlePostCreated} />
+              </div>
+            )}
+
+            <div className={styles.deployBar}>
+              <div>
+                <h3 className={styles.deployBarTitle}>
+                  {isOwner ? 'Your posts' : `Posts by ${displayName.trim()}`}
+                </h3>
+                <p className={styles.deployBarSub}>
+                  {posts.length === 0
+                    ? 'Updates shared on the network appear here.'
+                    : `${posts.length} ${posts.length === 1 ? 'update' : 'updates'} shared on the network.`}
+                </p>
+              </div>
+            </div>
+
+            {postsLoading ? (
+              <div className={styles.postsLoading} role="status" aria-label="Loading posts">
+                <div className={styles.loadingSpinner} />
+                <p className={styles.loadingText}>Loading posts...</p>
+              </div>
+            ) : postsError ? (
+              <div className={styles.postsError} role="alert">
+                <span className={styles.postsErrorText}>
+                  <AlertCircle size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
+                  {postsError}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRetryPosts}
+                  className={styles.postsRetryBtn}
+                >
+                  <RotateCw size={13} />
+                  <span>Retry</span>
+                </button>
+              </div>
+            ) : posts.length === 0 ? (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyIconBox}>
+                  <FileText size={28} color="var(--ink)" />
+                </div>
+                <h3 className={styles.emptyTitle}>
+                  {isOwner ? 'No posts yet' : 'No posts shared yet'}
+                </h3>
+                <p className={styles.emptyDesc}>
+                  {isOwner
+                    ? 'Share your first update above. Your posts will appear here and on the Home feed.'
+                    : 'This member has not shared any updates on the network yet.'}
+                </p>
+              </div>
+            ) : (
+              <div className={styles.postsList}>
+                {posts.map((post) => (
+                  <PostCard key={post.id} post={post} onPostDeleted={handlePostDeleted} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tab 1: Deployed Agents List */}
         {activeTab === 'agents' && (

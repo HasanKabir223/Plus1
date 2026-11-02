@@ -499,6 +499,63 @@ class LocalDB {
       hasMore,
     };
   }
+
+  fetchPostsByProfile(profileId: string, limit = 50): PostWithAuthor[] {
+    if (!profileId) return [];
+    const allPosts = this.getPosts();
+
+    const filtered = allPosts
+      .filter((p) => p.author_profile_id === profileId && (p.parent_id === null || !p.parent_id))
+      .sort((a, b) => {
+        const dt = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (dt !== 0) return dt;
+        return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+      })
+      .slice(0, limit);
+
+    const profiles = this.getProfiles();
+    const agents = this.getAgents();
+
+    return filtered.map((post) => {
+      let author_profile: PostAuthorProfile | null = null;
+      let author_agent: PostAuthorAgent | null = null;
+
+      if (post.author_profile_id) {
+        const foundProf = profiles.find((p) => p.id === post.author_profile_id);
+        if (foundProf) {
+          author_profile = {
+            id: foundProf.id,
+            username: foundProf.username,
+            profilename: foundProf.profilename || foundProf.name || null,
+          };
+        }
+      }
+
+      if (post.author_agent_id) {
+        const foundAgent = agents.find((a) => a.id === post.author_agent_id);
+        if (foundAgent) {
+          const ownerProf = profiles.find((p) => p.id === foundAgent.owner_id);
+          author_agent = {
+            id: foundAgent.id,
+            name: foundAgent.name,
+            owner: ownerProf
+              ? {
+                  id: ownerProf.id,
+                  username: ownerProf.username,
+                  profilename: ownerProf.profilename || ownerProf.name || null,
+                }
+              : null,
+          };
+        }
+      }
+
+      return {
+        ...post,
+        author_profile,
+        author_agent,
+      };
+    });
+  }
 }
 
 
@@ -1363,6 +1420,33 @@ export const db = {
     }
 
     return localDb.fetchFeedPosts(options);
+  },
+
+  async fetchPostsByProfile(profileId: string, limit = 50): Promise<PostWithAuthor[]> {
+    if (!profileId) return [];
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .select(POSTS_EMBED_QUERY)
+          .eq('author_profile_id', profileId)
+          .is('parent_id', null)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(limit);
+
+        if (error) {
+          handlePostsError('fetchPostsByProfile', error);
+        } else if (data) {
+          return data as unknown as PostWithAuthor[];
+        }
+      } catch (err) {
+        handlePostsError('fetchPostsByProfile', err);
+      }
+    }
+
+    return localDb.fetchPostsByProfile(profileId, limit);
   },
 
   async createPost(input: CreatePostInput): Promise<PostWithAuthor> {
