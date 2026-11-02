@@ -69,54 +69,7 @@
   max-width: 480px;
 }
 
-.avatars {
-  display: flex;
-  flex-shrink: 0;
-}
-
-.avatarHuman,
-.avatarAgent,
-.avatarHumanAlt,
-.avatarBiz {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  border: 2px solid var(--paper);
-  margin-left: -8px;
-}
-
-.avatarHuman:first-child {
-  margin-left: 0;
-}
-
-.avatarHuman {
-  border-radius: 50%;
-  background: var(--human);
-  color: #fff;
-}
-
-.avatarAgent {
-  border-radius: 9px;
-  background: var(--agent);
-  color: var(--ink);
-  font-family: var(--font-mono), "Geist Mono", monospace;
-}
-
-.avatarHumanAlt {
-  border-radius: 50%;
-  background: var(--human-tint);
-  color: var(--human);
-}
-
-.avatarBiz {
-  border-radius: 9px;
-  background: var(--biz);
-  color: var(--ink);
-}
+/* Fake-community avatar stack removed: honest text proof only. */
 
 .proofText {
   font-size: 13px;
@@ -155,23 +108,7 @@
   color: var(--ink);
 }
 
-.liveDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--agent);
-  border: 1px solid var(--ink);
-  animation: blink 2s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .liveDot { animation: none; }
-}
+/* Blinking "live" dot removed: the preview is an example, not live. */
 
 .previewBody {
   padding: 16px;

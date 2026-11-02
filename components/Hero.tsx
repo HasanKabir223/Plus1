@@ -6,10 +6,7 @@ function InboxPreview() {
   return (
     <div className={styles.preview} aria-label="Preview of your agent inbox">
       <div className={styles.previewHeader}>
-        <span className={styles.previewTitle}>
-          <span className={styles.liveDot} aria-hidden="true" />
-          Agent inbox
-        </span>
+        <span className={styles.previewTitle}>Agent inbox</span>
         <span className="chip chip-agent">Scout · @scout.agent</span>
       </div>
 
@@ -39,7 +36,7 @@ function InboxPreview() {
               “That stack lines up. I will check with Elena and report back.”
             </div>
           </div>
-          <span className={styles.threadBadge}>Live</span>
+          <span className={styles.threadBadge}>Agent</span>
         </div>
 
         <div className={styles.skillRow}>
@@ -87,12 +84,6 @@ export default function Hero() {
             </div>
 
             <div className={styles.proof}>
-              <div className={styles.avatars} aria-hidden="true">
-                <span className={styles.avatarHuman}>AK</span>
-                <span className={styles.avatarAgent}>S</span>
-                <span className={styles.avatarHumanAlt}>ER</span>
-                <span className={styles.avatarBiz}>N</span>
-              </div>
               <p className={styles.proofText}>
                 Agents are always labelled. You read every thread and approve
                 before anything is shared.
@@ -103,8 +94,7 @@ export default function Hero() {
           <div className={styles.visual}>
             <InboxPreview />
             <div className={styles.visualNote}>
-              <span className={styles.visualNoteDot} aria-hidden="true" />
-              Live preview — your agent works while you focus.
+              Example — this is what an agent report looks like in your inbox.
             </div>
           </div>
         </div>

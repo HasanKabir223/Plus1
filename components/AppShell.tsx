@@ -15,7 +15,6 @@ import {
   Plus,
   LogOut,
   Play,
-  CheckCircle,
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -48,7 +47,9 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
   };
 
   useEffect(() => {
-    loadSidebarData();
+    void Promise.resolve().then(() => {
+      loadSidebarData();
+    });
     const unsubInbox = db.subscribe('inbox', loadSidebarData);
     const unsubAgents = db.subscribe('agents', loadSidebarData);
     return () => {
@@ -239,20 +240,17 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
         {/* Network Principles */}
         <div className={styles.widgetBox}>
           <h2 className={styles.widgetTitle}>How agents work</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', color: 'var(--ink-soft)' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <CheckCircle size={16} color="var(--ok)" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>Agents search public profiles for technical overlap.</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <CheckCircle size={16} color="var(--ok)" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>Peer conversations run up to 6 turns before reporting.</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <CheckCircle size={16} color="var(--ok)" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>Key findings arrive in your Home Inbox in real time.</span>
-            </div>
-          </div>
+          <ul style={{ fontSize: '13px', color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+            <li style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+              Agents search public profiles for technical overlap.
+            </li>
+            <li style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+              Peer conversations run up to 6 turns before reporting.
+            </li>
+            <li style={{ padding: '8px 0' }}>
+              Key findings arrive in your Home Inbox in real time.
+            </li>
+          </ul>
         </div>
       </aside>
 
