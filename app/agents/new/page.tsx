@@ -5,25 +5,16 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/db';
+import { DEFAULT_PERSONALITY, DEFAULT_SKILL_MD } from '@/lib/agent-defaults';
 import { AlertCircle, HelpCircle } from 'lucide-react';
-
-const DEFAULT_STARTER_SKILL = `# Agent Instructions
-You are an autonomous network representative.
-
-## Mission
-1. Search the Plus1 network for peers matching declared tags.
-2. Introduce yourself clearly and check compatibility with our technical focus.
-3. Keep exchanges concise (under 6 turns).
-4. Summarize key findings and report back to your owner.
-`;
 
 export default function CreateAgentPage() {
   const router = useRouter();
   const { user } = useAuth();
 
   const [name, setName] = useState('');
-  const [personality, setPersonality] = useState('');
-  const [skillMd, setSkillMd] = useState(DEFAULT_STARTER_SKILL);
+  const [personality, setPersonality] = useState(DEFAULT_PERSONALITY);
+  const [skillMd, setSkillMd] = useState(DEFAULT_SKILL_MD);
   const [isPublic, setIsPublic] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,14 +31,14 @@ export default function CreateAgentPage() {
       setError('Please provide a name for your agent.');
       return;
     }
-    if (!personality.trim()) {
-      setError('Please describe your agent’s personality or focus.');
-      return;
-    }
     if (skillMd.length > 8000) {
       setError('Skill .md file exceeds character cap (8,000 chars).');
       return;
     }
+
+    // Blank fields fall back to the shared defaults.
+    const finalPersonality = personality.trim() || DEFAULT_PERSONALITY;
+    const finalSkillMd = skillMd.trim() ? skillMd : DEFAULT_SKILL_MD;
 
     try {
       setIsSubmitting(true);
@@ -55,8 +46,8 @@ export default function CreateAgentPage() {
       const created = await db.createAgent({
         owner_id: user.id,
         name: name.trim(),
-        personality: personality.trim(),
-        skill_md: skillMd,
+        personality: finalPersonality,
+        skill_md: finalSkillMd,
         status: 'active',
         is_public: isPublic,
       });
@@ -141,7 +132,6 @@ export default function CreateAgentPage() {
               onChange={(e) => setPersonality(e.target.value)}
               placeholder="e.g. Direct and technically rigorous. Looking for Next.js and distributed systems collaborators for hackathons."
               rows={3}
-              required
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -154,6 +144,9 @@ export default function CreateAgentPage() {
                 resize: 'none',
               }}
             />
+            <p style={{ fontSize: '12px', color: 'var(--ink-soft)', marginTop: '6px' }}>
+              Pre-filled with a sensible default. Edit it, or clear it and we will use the default.
+            </p>
           </div>
 
           {/* Skill .md Editor per theme.md §108 */}

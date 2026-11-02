@@ -5,7 +5,9 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
-import type { Agent, Profile, Conversation, InboxItem } from '@/types/database';
+import { DEFAULT_PERSONALITY, DEFAULT_SKILL_MD } from '@/lib/agent-defaults';
+import { supabase } from '@/lib/supabase/client';
+import type { Agent, Profile, Conversation, InboxItem, ActionLogEntry } from '@/types/database';
 import {
   Play,
   Clock,
@@ -13,8 +15,26 @@ import {
   CheckCircle,
   ExternalLink,
   Save,
-  Radio,
 } from 'lucide-react';
+
+// Python agent-brain API (URL only, not a secret). Local default: uvicorn on :8000.
+const AGENT_API_URL = process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://127.0.0.1:8000';
+
+// Every outcome of one Run click, rendered inline below the button.
+type RunOutcome =
+  | { kind: 'posted' | 'replied'; text: string; postId: string | null; reason: string }
+  | { kind: 'none'; reason: string }
+  | { kind: 'cooldown'; reason: string; retryAfter: number }
+  | { kind: 'paused' }
+  | { kind: 'busy' }
+  | { kind: 'error'; message: string };
+
+function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  const m = Math.floor(s / 60);
+  if (m <= 0) return `${s}s`;
+  return `${m}m ${s % 60}s`;
+}
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -35,10 +55,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Run state
+  // Run state (Python agent brain: POST /agents/{id}/run)
   const [isRunning, setIsRunning] = useState(false);
-  const [runResult, setRunResult] = useState<InboxItem | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
+  const [runOutcome, setRunOutcome] = useState<RunOutcome | null>(null);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  // Recent runs from action_log (owner only, via RLS)
+  const [runHistory, setRunHistory] = useState<ActionLogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const isOwner = Boolean(user && agent && user.id === agent.owner_id);
 
@@ -74,7 +99,10 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   useEffect(() => {
-    fetchAgentData();
+    // Mount fetch: state updates land in the .then callback, like home/page.tsx.
+    void Promise.resolve().then(() => {
+      fetchAgentData();
+    });
   }, [agentId, user]);
 
   const handleToggleStatus = async () => {
@@ -94,12 +122,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     try {
       setIsSaving(true);
       setSaveSuccess(false);
+      // Blank fields fall back to the shared defaults.
       const updated = await db.updateAgent(agent.id, {
         name,
-        personality,
-        skill_md: skillMd,
+        personality: personality.trim() || DEFAULT_PERSONALITY,
+        skill_md: skillMd.trim() ? skillMd : DEFAULT_SKILL_MD,
       });
       setAgent(updated);
+      setPersonality(updated.personality);
+      setSkillMd(updated.skill_md);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: unknown) {
@@ -109,21 +140,141 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const fetchRunHistory = async () => {
+    if (!supabase || !agent || !isOwner) return;
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const { data, error: queryError } = await supabase
+        .from('action_log')
+        .select('id,agent_id,trigger,action,status,created_at,output,error')
+        .eq('agent_id', agent.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (queryError) {
+        // Migration not applied yet (action_log missing): runs show as
+        // empty instead of an error wall. Setup is a one-time SQL file.
+        const code = (queryError as { code?: string })?.code || '';
+        const message = (queryError as { message?: string })?.message || '';
+        if (code === 'PGRST205' || code === '42P01' || /does not exist/i.test(message)) {
+          setRunHistory([]);
+          return;
+        }
+        throw queryError;
+      }
+      setRunHistory((data || []) as ActionLogEntry[]);
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : 'Could not load recent runs.';
+      console.error('[agent-page] load run history failed', agentId, detail);
+      setHistoryError(detail);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOwner || !agent) return;
+    // Mount fetch: state updates land in the .then callback, like home/page.tsx.
+    void Promise.resolve().then(() => {
+      fetchRunHistory();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, agent?.id]);
+
+  // Cooldown countdown: ticks down once a second, re-enables Run at zero.
+  useEffect(() => {
+    if (cooldownLeft <= 0) return;
+    const timer = setTimeout(() => setCooldownLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldownLeft]);
+
   const handleRunAgent = async () => {
     if (!agent || !user) return;
     if (agent.status === 'paused') {
-      setRunError('Agent is paused. Resume the agent before running.');
+      setRunOutcome({ kind: 'paused' });
       return;
     }
     try {
       setIsRunning(true);
-      setRunError(null);
-      setRunResult(null);
-      const result = await db.runAgent(agent.id, user.id);
-      setRunResult(result);
-      await fetchAgentData();
+      setRunOutcome(null);
+      if (!supabase) {
+        setRunOutcome({ kind: 'error', message: 'Supabase is not configured.' });
+        return;
+      }
+      // Fresh access token on every click; the backend verifies it.
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setRunOutcome({ kind: 'error', message: 'Your session expired. Sign in again.' });
+        return;
+      }
+      const resp = await fetch(`${AGENT_API_URL}/agents/${agent.id}/run`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      const body = await resp.json().catch(() => ({}));
+
+      if (resp.status === 401) {
+        setRunOutcome({ kind: 'error', message: 'Your session expired. Sign in again.' });
+        return;
+      }
+      if (resp.status === 403) {
+        setRunOutcome({ kind: 'error', message: 'Only the agent owner can run it.' });
+        return;
+      }
+      if (resp.status === 404) {
+        setRunOutcome({ kind: 'error', message: 'Agent not found.' });
+        return;
+      }
+      if (resp.status === 429) {
+        const secs = Number(body.retry_after_seconds) || 60;
+        setRunOutcome({ kind: 'cooldown', reason: String(body.reason || 'cooldown'), retryAfter: secs });
+        setCooldownLeft(secs);
+        return;
+      }
+      if (resp.status === 503) {
+        // Provider busy or backend not set up yet: prefer the backend's words.
+        const detail = typeof body.message === 'string' && body.message
+          ? body.message
+          : 'The model is busy. Try again in a bit.';
+        setRunOutcome({ kind: 'error', message: detail });
+        return;
+      }
+      if (!resp.ok) {
+        throw new Error(`agent brain returned HTTP ${resp.status}`);
+      }
+      if (body.status === 'posted' || body.status === 'replied') {
+        setRunOutcome({
+          kind: body.status,
+          text: String(body.text || ''),
+          postId: body.post_id ? String(body.post_id) : null,
+          reason: String(body.reason || ''),
+        });
+        await fetchAgentData();
+        await fetchRunHistory();
+      } else if (body.status === 'none') {
+        setRunOutcome({ kind: 'none', reason: String(body.reason || '') });
+        await fetchRunHistory();
+      } else if (body.status === 'skipped') {
+        setRunOutcome({ kind: 'paused' });
+      } else {
+        setRunOutcome({ kind: 'error', message: 'Something went wrong.' });
+      }
     } catch (err: unknown) {
-      setRunError(err instanceof Error ? err.message : 'Run failed');
+      console.error('[agent-page] run agent failed', agentId, err);
+      // fetch() itself failing means the backend is unreachable.
+      const offline = err instanceof TypeError;
+      setRunOutcome({
+        kind: 'error',
+        message: offline
+          ? 'Could not reach the agent server. Is the backend running?'
+          : 'Something went wrong.',
+      });
     } finally {
       setIsRunning(false);
     }
@@ -218,19 +369,21 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
                 <button
                   onClick={handleRunAgent}
-                  disabled={isRunning || agent.status === 'paused'}
+                  disabled={isRunning || cooldownLeft > 0 || agent.status === 'paused'}
                   className="btn-primary"
                   style={{
                     padding: '8px 16px',
                     fontSize: '13px',
-                    opacity: agent.status === 'paused' ? 0.4 : 1,
+                    opacity: agent.status === 'paused' || cooldownLeft > 0 ? 0.4 : 1,
                   }}
                 >
                   {isRunning ? (
-                    'Executing run...'
+                    'Running...'
+                  ) : cooldownLeft > 0 ? (
+                    `Run now (${formatCountdown(cooldownLeft)})`
                   ) : (
                     <>
-                      <Play size={13} /> Run agent
+                      <Play size={13} /> Run now
                     </>
                   )}
                 </button>
@@ -258,61 +411,84 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </div>
 
-          {/* Run result notice */}
-          {runResult && (
+          {/* Run outcome notice (one Run click, plain language) */}
+          {runOutcome && (
             <div
+              role="status"
+              aria-live="polite"
               style={{
                 marginTop: '14px',
                 padding: '14px',
-                backgroundColor: 'var(--agent-tint)',
-                border: '1px solid var(--agent)',
+                backgroundColor:
+                  runOutcome.kind === 'error' ? 'var(--surface)' : 'var(--agent-tint)',
+                border: `1px solid ${
+                  runOutcome.kind === 'error' ? 'var(--err)' : 'var(--agent)'
+                }`,
                 borderRadius: 'var(--radius-sm)',
                 fontSize: '14px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
-                <CheckCircle size={16} color="var(--ink)" />
-                <span>Run completed successfully</span>
-              </div>
-              <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runResult.summary}</p>
-              {runResult.conversation_id && (
-                <div style={{ marginTop: '8px' }}>
-                  <Link
-                    href={`/threads/${runResult.conversation_id}`}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      color: 'var(--human)',
-                      fontWeight: 600,
-                      fontSize: '13px',
-                    }}
-                  >
-                    <span>View full conversation thread</span>
-                    <ExternalLink size={12} />
-                  </Link>
+              {(runOutcome.kind === 'posted' || runOutcome.kind === 'replied') && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
+                    <CheckCircle size={16} color="var(--ink)" />
+                    <span>{runOutcome.kind === 'posted' ? 'Posted.' : 'Replied.'}</span>
+                  </div>
+                  <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runOutcome.text}</p>
+                  <div style={{ marginTop: '8px' }}>
+                    <Link
+                      href="/home?tab=feed"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        color: 'var(--human)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                      }}
+                    >
+                      <span>See it in the Feed</span>
+                      <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                </>
+              )}
+              {runOutcome.kind === 'none' && (
+                <>
+                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>Chose not to post.</div>
+                  <p style={{ color: 'var(--ink-soft)', fontSize: '13px', lineHeight: 1.45 }}>
+                    {runOutcome.reason}
+                  </p>
+                </>
+              )}
+              {runOutcome.kind === 'cooldown' && (
+                <>
+                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                    {runOutcome.reason === 'cooldown'
+                      ? `Try again in ${formatCountdown(cooldownLeft)}.`
+                      : runOutcome.reason === 'agent_daily_cap'
+                        ? 'Daily limit reached for this agent. Try again tomorrow.'
+                        : 'Network budget used up for today. Try again tomorrow.'}
+                  </div>
+                  <p style={{ color: 'var(--ink-soft)', fontSize: '13px' }}>
+                    {runOutcome.reason === 'cooldown'
+                      ? 'The agent needs a breather between runs.'
+                      : `The run was skipped (${runOutcome.reason}). Nothing was posted.`}
+                  </p>
+                </>
+              )}
+              {runOutcome.kind === 'paused' && (
+                <div style={{ fontWeight: 700 }}>This agent is paused.</div>
+              )}
+              {runOutcome.kind === 'busy' && (
+                <div style={{ fontWeight: 700 }}>The model is busy. Try again in a bit.</div>
+              )}
+              {runOutcome.kind === 'error' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--err)' }}>
+                  <AlertCircle size={16} />
+                  <span>{runOutcome.message}</span>
                 </div>
               )}
-            </div>
-          )}
-
-          {runError && (
-            <div
-              style={{
-                marginTop: '14px',
-                padding: '12px 14px',
-                backgroundColor: '#FFF5F5',
-                border: '1px solid var(--err)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--err)',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <AlertCircle size={16} />
-              <span>{runError}</span>
             </div>
           )}
         </div>
@@ -452,6 +628,71 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
             <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>About this agent</h2>
             <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--ink)', wordBreak: 'break-word' }}>{agent.personality}</p>
+          </div>
+        )}
+
+        {/* Recent runs from action_log (Owner only, via RLS) */}
+        {isOwner && (
+          <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 700, marginBottom: '14px' }}>
+              Recent runs
+            </h2>
+
+            {historyLoading ? (
+              <div style={{ padding: '16px 0', color: 'var(--ink-soft)', fontSize: '14px' }}>
+                Loading recent runs...
+              </div>
+            ) : historyError ? (
+              <div
+                role="alert"
+                style={{
+                  padding: '12px 14px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--err)',
+                  borderRadius: 'var(--radius-sm)',
+                  color: 'var(--err)',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <AlertCircle size={16} />
+                <span>Could not load recent runs: {historyError}</span>
+              </div>
+            ) : runHistory.length === 0 ? (
+              <p style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
+                No runs recorded yet. Click &ldquo;Run now&rdquo; above to wake {agent.name} up.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {runHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      padding: '10px 0',
+                      borderBottom: '1px solid var(--line)',
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      gap: '10px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', color: 'var(--ink-soft)', minWidth: '70px' }}>
+                      {formatRelativeTime(entry.created_at)}
+                    </span>
+                    <span className="chip chip-agent" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                      {entry.action || 'run'}
+                    </span>
+                    <span style={{ fontSize: '13px', color: 'var(--ink)' }}>
+                      {entry.status || 'unknown'}
+                      {entry.output?.reason ? ` — ${entry.output.reason}` : ''}
+                      {entry.error ? ` (${entry.error})` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
