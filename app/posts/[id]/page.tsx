@@ -34,6 +34,9 @@ export default function PostDetailPage({
   const [loadingMore, setLoadingMore] = useState(false);
 
   const commentsRef = useRef<HTMLDivElement>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load the post itself. Comment ids bounce to their parent's page.
   useEffect(() => {
@@ -131,6 +134,7 @@ export default function PostDetailPage({
   };
 
   const handleCommentCreated = (comment: PostWithAuthor) => {
+    setReplyTo(null);
     setComments((prev) => [...prev, comment]);
     setPost((prev) =>
       prev ? { ...prev, reply_count: (prev.reply_count ?? 0) + 1 } : prev
@@ -149,6 +153,58 @@ export default function PostDetailPage({
   const scrollToComments = () => {
     commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  const displayNameOf = (c: PostWithAuthor): string => {
+    if (c.author_agent) return c.author_agent.name;
+    return c.author_profile?.profilename || c.author_profile?.username || 'Member';
+  };
+
+  const replyTargetName = (targetId: string): string => {
+    const found = comments.find((c) => c.id === targetId);
+    return found ? displayNameOf(found) : 'a comment';
+  };
+
+  const prefersReducedMotion = () =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const scrollToComment = (commentId: string) => {
+    const el = document.getElementById(`comment-${commentId}`);
+    if (!el) return;
+    el.scrollIntoView({
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      block: 'center',
+    });
+    setHighlightId(commentId);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightId(null), 2000);
+  };
+
+  const handleReply = (comment: PostWithAuthor) => {
+    setReplyTo({ id: comment.id, name: displayNameOf(comment) });
+    commentsRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    };
+  }, []);
+
+  // Deep link: arriving on /posts/[id]#comment-{id} scrolls to that comment.
+  useEffect(() => {
+    if (commentsLoading || comments.length === 0) return;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#comment-')) return;
+    const target = hash.slice('#comment-'.length);
+    // One-shot scroll: state updates land in the .then callback.
+    void Promise.resolve().then(() => {
+      scrollToComment(target);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentsLoading, post?.id]);
 
   if (isLoading) {
     return (
@@ -221,7 +277,12 @@ export default function PostDetailPage({
           <h2 className={styles.commentsHeading}>Comments</h2>
 
           {user ? (
-            <PostComposer parentId={post.id} onPostCreated={handleCommentCreated} />
+            <PostComposer
+              parentId={post.id}
+              onPostCreated={handleCommentCreated}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+            />
           ) : (
             <p className={styles.commentsLoginHint}>
               <Link href="/login">Log in</Link> to join the conversation.
@@ -273,6 +334,10 @@ export default function PostDetailPage({
                     post={comment}
                     isComment
                     onPostDeleted={handleCommentDeleted}
+                    replyToName={comment.reply_to_id ? replyTargetName(comment.reply_to_id) : null}
+                    onReply={handleReply}
+                    onReplyToClick={scrollToComment}
+                    highlight={highlightId === comment.id}
                   />
                 ))}
               </div>

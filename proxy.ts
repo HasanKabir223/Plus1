@@ -60,12 +60,16 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // Verify the user against the Supabase Auth server. This proxy only
-  // decides redirects; onboarding gating is enforced again client-side
-  // in AuthProvider, and RLS guards the data itself.
+  // Read the session from cookies WITHOUT a network round trip.
+  // getUser() contacts the Supabase Auth server on every request
+  // (~300-850ms); getSession() reads local cookies and only refreshes an
+  // expired token. This proxy only decides redirects; onboarding gating
+  // is enforced again client-side in AuthProvider, and RLS plus
+  // server-side verification guard the data itself.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   // Let API routes handle their own authentication
   if (pathname.startsWith('/api/')) {

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth, isProfileOnboarded } from '@/lib/auth-context';
 import { db, formatFeedTimestamp } from '@/lib/db';
 import type { PostWithAuthor } from '@/types/database';
-import { Trash2, Loader2, AlertCircle, Heart, MessageCircle } from 'lucide-react';
+import { Trash2, Loader2, AlertCircle, Heart, MessageCircle, Reply } from 'lucide-react';
 import styles from './feed.module.css';
 
 interface PostCardProps {
@@ -14,6 +14,10 @@ interface PostCardProps {
   onPostDeleted?: (postId: string) => void;
   isComment?: boolean;
   onCommentClick?: () => void;
+  replyToName?: string | null;
+  onReply?: (comment: PostWithAuthor) => void;
+  onReplyToClick?: (targetId: string) => void;
+  highlight?: boolean;
 }
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact' });
@@ -37,6 +41,10 @@ export default function PostCard({
   onPostDeleted,
   isComment = false,
   onCommentClick,
+  replyToName,
+  onReply,
+  onReplyToClick,
+  highlight = false,
 }: PostCardProps) {
   const router = useRouter();
   const { user, profile: ownProfile } = useAuth();
@@ -121,6 +129,12 @@ export default function PostCard({
     router.push(`/posts/${post.id}`);
   };
 
+  const handleReply = () => {
+    if (!onReply) return;
+    if (!requireJoined()) return;
+    onReply(post);
+  };
+
   // Clicking the card body opens the post page. Clicks that land on a link,
   // button or other control inside the card must not navigate. Keyboard users
   // reach the page through the comment button and author links instead.
@@ -153,9 +167,14 @@ export default function PostCard({
   // Agents have no handle column; identity is the owner's @username.
   const ownerUsername = agent?.owner?.username || '';
 
+  const articleClass = highlight
+    ? `${styles.postCard} ${styles.commentHighlight}`
+    : styles.postCard;
+
   return (
     <article
-      className={styles.postCard}
+      id={isComment ? `comment-${post.id}` : undefined}
+      className={articleClass}
       aria-labelledby={`post-author-${post.id}`}
       onClick={handleCardClick}
     >
@@ -257,6 +276,18 @@ export default function PostCard({
           </div>
         )}
 
+        {/* Quiet "answering" line for threaded replies */}
+        {isComment && post.reply_to_id && (
+          <button
+            type="button"
+            onClick={() => onReplyToClick?.(post.reply_to_id as string)}
+            className={styles.replyingTo}
+            aria-label={`Scroll to the comment by ${replyToName || 'a comment'}`}
+          >
+            Replying to {replyToName || 'a comment'}
+          </button>
+        )}
+
         {/* Post Body: Strictly plain text with pre-wrap whitespace */}
         <p className={styles.postBody}>{post.body}</p>
 
@@ -279,6 +310,18 @@ export default function PostCard({
             />
             {likeCount > 0 && <span>{formatCount(likeCount)}</span>}
           </button>
+
+          {isComment && onReply && user && isProfileOnboarded(ownProfile) && (
+            <button
+              type="button"
+              onClick={handleReply}
+              className={styles.actionBtn}
+              aria-label="Reply to this comment"
+              title="Reply"
+            >
+              <Reply size={16} color="var(--ink-soft)" aria-hidden="true" />
+            </button>
+          )}
 
           {!isComment && (
             <button

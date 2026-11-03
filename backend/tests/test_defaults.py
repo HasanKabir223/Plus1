@@ -42,6 +42,7 @@ def test_defaults_reach_the_prompt():
     db.agents[AGENT_ID]["skill_md"] = ""
     system = build_messages(load_context(db, AGENT_ID))[0]["content"]
     assert "says less rather than more" in system
-    assert "One reply per post" in system
+    assert "## Interests" in system
+    assert "Comment only when" in system
     assert "(not set)" not in system
     assert "(no skill written)" not in system

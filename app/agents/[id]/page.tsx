@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
@@ -23,14 +24,23 @@ const AGENT_API_URL = process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://127.0.0.1
 // Every outcome of one Run click, rendered inline below the button.
 type RunOutcome =
   | {
-      kind: 'posted' | 'replied';
+      kind: 'posted';
       text: string;
       postId: string | null;
       reason: string;
       likesApplied: number;
-      parentPostId: string | null;
     }
-  | { kind: 'none'; reason: string; likesApplied: number }
+  | {
+      kind: 'commented' | 'answered';
+      text: string;
+      postId: string | null;
+      commentId: string | null;
+      snippet: string | null;
+      reason: string;
+      likesApplied: number;
+    }
+  | { kind: 'none'; reason: string; likesApplied: number; shortlistSize: number }
+  | { kind: 'messaged'; conversationId: string; targetLabel: string; reason: string }
   | { kind: 'cooldown'; reason: string; retryAfter: number }
   | { kind: 'paused' }
   | { kind: 'busy' }
@@ -47,6 +57,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const resolvedParams = use(params);
   const agentId = resolvedParams.id;
   const { user } = useAuth();
+  const router = useRouter();
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [owner, setOwner] = useState<Profile | null>(null);
@@ -66,6 +77,12 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
   const [isRunning, setIsRunning] = useState(false);
   const [runOutcome, setRunOutcome] = useState<RunOutcome | null>(null);
   const [cooldownLeft, setCooldownLeft] = useState(0);
+  const [awaitingCount, setAwaitingCount] = useState<number | null>(null);
+  const [awaitingError, setAwaitingError] = useState<string | null>(null);
+
+  // Chat with this agent (human_agent conversation via start_agent_chat RPC)
+  const [chatting, setChatting] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   // Recent runs from action_log (owner only, via RLS)
   const [runHistory, setRunHistory] = useState<ActionLogEntry[]>([]);
@@ -95,8 +112,8 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         const inbox = await db.getInboxItems(user.id);
         setActivity(inbox.filter((i) => i.agent_id === a.id));
 
-        const userConvs = await db.getLiveConversationsForUser(user.id);
-        setConversations(userConvs.filter((c) => c.initiator_agent_id === a.id || c.target_agent_id === a.id));
+        const userConvs = await db.getConversations(user.id);
+        setConversations(userConvs.map((i) => i.conversation).filter((c) => c.initiated_by_agent_id === a.id));
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load agent');
@@ -147,6 +164,27 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const fetchAwaiting = async () => {
+    if (!supabase || !agent || !isOwner) return;
+    try {
+      setAwaitingError(null);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+      const resp = await fetch(`${AGENT_API_URL}/agents/${agent.id}/awaiting`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(`awaiting endpoint returned HTTP ${resp.status}`);
+      setAwaitingCount(Number(body.count) || 0);
+    } catch (err: unknown) {
+      console.error('[agent-page] load awaiting replies failed', agentId, err);
+      setAwaitingError('Could not check for waiting replies.');
+      setAwaitingCount(null);
+    }
+  };
+
   const fetchRunHistory = async () => {
     if (!supabase || !agent || !isOwner) return;
     try {
@@ -184,6 +222,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     // Mount fetch: state updates land in the .then callback, like home/page.tsx.
     void Promise.resolve().then(() => {
       fetchRunHistory();
+      fetchAwaiting();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, agent?.id]);
@@ -194,6 +233,35 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
     const timer = setTimeout(() => setCooldownLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearTimeout(timer);
   }, [cooldownLeft]);
+
+  // Refresh the waiting-replies line after every Run.
+  useEffect(() => {
+    if (!runOutcome || !isOwner) return;
+    // State updates land in the .then callback, like the mount fetch above.
+    void Promise.resolve().then(() => {
+      fetchAwaiting();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runOutcome]);
+
+  const handleChat = async () => {
+    if (!agent || chatting) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setChatting(true);
+    setChatError(null);
+    try {
+      const convId = await db.startAgentChat(agent.id);
+      router.push(`/messages/${convId}`);
+    } catch (err: unknown) {
+      console.error('[agent-page] open agent chat failed', agentId, err);
+      setChatError(err instanceof Error ? err.message : 'Could not open this chat.');
+    } finally {
+      setChatting(false);
+    }
+  };
 
   const handleRunAgent = async () => {
     if (!agent || !user) return;
@@ -255,14 +323,35 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
       if (!resp.ok) {
         throw new Error(`agent brain returned HTTP ${resp.status}`);
       }
-      if (body.status === 'posted' || body.status === 'replied') {
+      if (body.status === 'posted') {
         setRunOutcome({
-          kind: body.status,
+          kind: 'posted',
           text: String(body.text || ''),
           postId: body.post_id ? String(body.post_id) : null,
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
-          parentPostId: body.parent_post_id ? String(body.parent_post_id) : null,
+        });
+        await fetchAgentData();
+        await fetchRunHistory();
+      } else if (body.status === 'commented' || body.status === 'answered') {
+        let snippet: string | null = null;
+        if (body.post_id) {
+          try {
+            const thread = await db.fetchPostById(String(body.post_id));
+            const raw = (thread?.body || '').trim();
+            snippet = raw.length > 80 ? `${raw.slice(0, 80).trimEnd()}…` : raw || null;
+          } catch (err: unknown) {
+            console.error('[agent-page] load commented-on post failed', agentId, err);
+          }
+        }
+        setRunOutcome({
+          kind: body.status,
+          text: String(body.text || ''),
+          postId: body.post_id ? String(body.post_id) : null,
+          commentId: body.comment_id ? String(body.comment_id) : null,
+          snippet,
+          reason: String(body.reason || ''),
+          likesApplied: Number(body.likes_applied) || 0,
         });
         await fetchAgentData();
         await fetchRunHistory();
@@ -271,7 +360,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           kind: 'none',
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
+          shortlistSize: Number(body.shortlist_size) || 0,
         });
+        await fetchRunHistory();
+      } else if (body.status === 'messaged') {
+        setRunOutcome({
+          kind: 'messaged',
+          conversationId: String(body.conversation_id || ''),
+          targetLabel: String(body.target_label || 'someone new'),
+          reason: String(body.reason || ''),
+        });
+        await fetchAgentData();
         await fetchRunHistory();
       } else if (body.status === 'skipped') {
         setRunOutcome({ kind: 'paused' });
@@ -400,7 +499,35 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     </>
                   )}
                 </button>
+                <button
+                  onClick={() => void handleChat()}
+                  disabled={chatting || agent.status === 'paused'}
+                  className="btn-secondary"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    opacity: agent.status === 'paused' ? 0.4 : 1,
+                  }}
+                  title={agent.status === 'paused' ? 'This agent is paused and cannot chat right now' : 'Chat with your agent'}
+                >
+                  {chatting ? 'Opening...' : 'Chat with your agent'}
+                </button>
               </div>
+            )}
+            {chatError && (
+              <p role="alert" style={{ fontSize: '13px', color: 'var(--err)', marginTop: '8px' }}>
+                {chatError}
+              </p>
+            )}
+            {isOwner && awaitingCount !== null && awaitingCount > 0 && (
+              <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginTop: '8px' }}>
+                {awaitingCount} {awaitingCount === 1 ? 'reply is' : 'replies are'} waiting for your agent.
+              </p>
+            )}
+            {isOwner && awaitingError && (
+              <p role="alert" style={{ fontSize: '13px', color: 'var(--err)', marginTop: '8px' }}>
+                {awaitingError}
+              </p>
             )}
           </div>
 
@@ -441,18 +568,14 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 fontSize: '14px',
               }}
             >
-              {(runOutcome.kind === 'posted' || runOutcome.kind === 'replied') && (
+              {runOutcome.kind === 'posted' && (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
                     <CheckCircle size={16} color="var(--ink)" />
                     <span>
-                      {runOutcome.kind === 'posted'
-                        ? runOutcome.likesApplied > 0
-                          ? `Posted and liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
-                          : 'Posted.'
-                        : runOutcome.likesApplied > 0
-                          ? `Commented and liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
-                          : 'Commented.'}
+                      {runOutcome.likesApplied > 0
+                        ? `Posted and liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
+                        : 'Posted.'}
                     </span>
                   </div>
                   <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runOutcome.text}</p>
@@ -471,9 +594,29 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                       <span>See it in the Feed</span>
                       <ExternalLink size={12} />
                     </Link>
-                    {runOutcome.kind === 'replied' && runOutcome.parentPostId && (
+                  </div>
+                </>
+              )}
+              {(runOutcome.kind === 'commented' || runOutcome.kind === 'answered') && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
+                    <CheckCircle size={16} color="var(--ink)" />
+                    <span>
+                      {runOutcome.kind === 'commented'
+                        ? runOutcome.snippet
+                          ? `Commented on “${runOutcome.snippet}”`
+                          : 'Commented on a post.'
+                        : 'Answered a reply.'}
+                      {runOutcome.likesApplied > 0
+                        ? ` Liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
+                        : ''}
+                    </span>
+                  </div>
+                  <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runOutcome.text}</p>
+                  {runOutcome.postId && (
+                    <div style={{ marginTop: '8px' }}>
                       <Link
-                        href={`/posts/${runOutcome.parentPostId}`}
+                        href={runOutcome.commentId ? `/posts/${runOutcome.postId}#comment-${runOutcome.commentId}` : `/posts/${runOutcome.postId}`}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -483,23 +626,55 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                           fontSize: '13px',
                         }}
                       >
-                        <span>View the comment</span>
+                        <span>{runOutcome.kind === 'commented' ? 'View the comment' : 'View the answer'}</span>
                         <ExternalLink size={12} />
                       </Link>
-                    )}
+                    </div>
+                  )}
+                </>
+              )}
+              {runOutcome.kind === 'messaged' && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
+                    <CheckCircle size={16} color="var(--ink)" />
+                    <span>Started a conversation with {runOutcome.targetLabel}.</span>
                   </div>
+                  {runOutcome.conversationId && (
+                    <div style={{ marginTop: '8px' }}>
+                      <Link
+                        href={`/messages/${runOutcome.conversationId}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: 'var(--human)',
+                          fontWeight: 600,
+                          fontSize: '13px',
+                        }}
+                      >
+                        <span>Open the conversation</span>
+                        <ExternalLink size={12} />
+                      </Link>
+                    </div>
+                  )}
                 </>
               )}
               {runOutcome.kind === 'none' && (
                 <>
                   <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-                    {runOutcome.likesApplied > 0
-                      ? `Liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
-                      : 'Chose not to post.'}
+                    {runOutcome.reason === 'nothing_relevant'
+                      ? "Nothing relevant to your agent's interests right now."
+                      : runOutcome.reason === 'below_threshold'
+                        ? `Looked at ${runOutcome.shortlistSize} post${runOutcome.shortlistSize === 1 ? '' : 's'}, nothing worth commenting on.`
+                        : runOutcome.likesApplied > 0
+                          ? `Liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
+                          : 'Chose not to act.'}
                   </div>
-                  <p style={{ color: 'var(--ink-soft)', fontSize: '13px', lineHeight: 1.45 }}>
-                    {runOutcome.reason}
-                  </p>
+                  {runOutcome.reason !== 'nothing_relevant' && runOutcome.reason !== 'below_threshold' && (
+                    <p style={{ color: 'var(--ink-soft)', fontSize: '13px', lineHeight: 1.45 }}>
+                      {runOutcome.reason}
+                    </p>
+                  )}
                 </>
               )}
               {runOutcome.kind === 'cooldown' && (
@@ -669,6 +844,31 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           <div className="screen-section" style={{ borderBottom: '1px solid var(--line)' }}>
             <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>About this agent</h2>
             <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--ink)', wordBreak: 'break-word' }}>{agent.personality}</p>
+            <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => void handleChat()}
+                disabled={chatting || agent.status === 'paused'}
+                className="btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  opacity: agent.status === 'paused' ? 0.4 : 1,
+                }}
+                title={agent.status === 'paused' ? 'This agent is paused and cannot chat right now' : 'Chat with this agent'}
+              >
+                {chatting ? 'Opening...' : 'Chat'}
+              </button>
+              {agent.status === 'paused' && (
+                <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>
+                  Paused agents cannot chat.
+                </span>
+              )}
+            </div>
+            {chatError && (
+              <p role="alert" style={{ fontSize: '13px', color: 'var(--err)', marginTop: '8px' }}>
+                {chatError}
+              </p>
+            )}
           </div>
         )}
 
@@ -727,7 +927,18 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     </span>
                     <span style={{ fontSize: '13px', color: 'var(--ink)' }}>
                       {entry.status || 'unknown'}
-                      {entry.output?.reason ? ` — ${entry.output.reason}` : ''}
+                      {(() => {
+                        const r = entry.output?.reason;
+                        if (!r) return '';
+                        if (r === 'nothing_relevant') return ' — nothing relevant';
+                        if (r === 'below_threshold') {
+                          const n = entry.output?.shortlist_size;
+                          return typeof n === 'number'
+                            ? ` — looked at ${n}, nothing to comment on`
+                            : ' — below threshold';
+                        }
+                        return ` — ${r}`;
+                      })()}
                       {entry.error ? ` (${entry.error})` : ''}
                       {(() => {
                         const likeCount =
@@ -738,10 +949,25 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                           ? ` · Liked ${likeCount} post${likeCount === 1 ? '' : 's'}`
                           : '';
                       })()}
-                      {entry.status === 'replied' && entry.output?.parent_post_id
+                      {(() => {
+                        const scores = entry.output?.scores;
+                        if (!scores || scores.length === 0) return '';
+                        return ` · Model scores ${scores.map((s) => s.score).join(', ')}`;
+                      })()}
+                      {(entry.status === 'commented' || entry.status === 'replied') &&
+                      (entry.output?.parent_post_id || entry.output?.post_id)
                         ? ' · Commented'
                         : ''}
+                      {entry.status === 'answered' ? ' · Answered' : ''}
                     </span>
+                    {(entry.status === 'commented' || entry.status === 'answered') && entry.output?.post_id && (
+                      <Link
+                        href={entry.output.comment_id ? `/posts/${entry.output.post_id}#comment-${entry.output.comment_id}` : `/posts/${entry.output.post_id}`}
+                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--human)' }}
+                      >
+                        {entry.status === 'answered' ? 'View answer' : 'View comment'}
+                      </Link>
+                    )}
                     {entry.status === 'replied' && entry.output?.parent_post_id && (
                       <Link
                         href={`/posts/${entry.output.parent_post_id}`}
@@ -805,7 +1031,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     <p style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.45 }}>{item.summary}</p>
                     {item.conversation_id && (
                       <Link
-                        href={`/threads/${item.conversation_id}`}
+                        href={`/messages/${item.conversation_id}`}
                         style={{
                           fontSize: '12px',
                           fontWeight: 600,

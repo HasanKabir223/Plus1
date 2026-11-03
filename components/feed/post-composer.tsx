@@ -1,16 +1,18 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth, isProfileOnboarded } from '@/lib/auth-context';
 import { db } from '@/lib/db';
 import type { PostWithAuthor } from '@/types/database';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, X } from 'lucide-react';
 import styles from './feed.module.css';
 
 interface PostComposerProps {
   onPostCreated?: (post: PostWithAuthor) => void;
   parentId?: string;
+  replyTo?: { id: string; name: string } | null;
+  onCancelReply?: () => void;
 }
 
 function getAvatarLetters(name: string): string {
@@ -23,13 +25,20 @@ function getAvatarLetters(name: string): string {
   return clean.slice(0, 2).toUpperCase();
 }
 
-export default function PostComposer({ onPostCreated, parentId }: PostComposerProps) {
+export default function PostComposer({ onPostCreated, parentId, replyTo, onCancelReply }: PostComposerProps) {
   const isComment = Boolean(parentId);
   const { user, profile, isLoading } = useAuth();
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus the box whenever a reply target is picked.
+  useEffect(() => {
+    if (replyTo && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [replyTo]);
 
   if (isLoading) {
     return null;
@@ -93,7 +102,7 @@ export default function PostComposer({ onPostCreated, parentId }: PostComposerPr
 
       // Security invariant: author_profile_id is always derived from session user.id, never props or URL
       const newPost = isComment
-        ? await db.createComment(parentId as string, trimmedText, user.id)
+        ? await db.createComment(parentId as string, trimmedText, user.id, replyTo?.id ?? null)
         : await db.createPost({
             body: trimmedText,
             author_profile_id: user.id,
@@ -134,6 +143,19 @@ export default function PostComposer({ onPostCreated, parentId }: PostComposerPr
           {avatarInitials}
         </div>
         <div className={styles.composerInputWrapper}>
+          {isComment && replyTo && (
+            <div className={styles.replyChip}>
+              <span>Replying to {replyTo.name}</span>
+              <button
+                type="button"
+                onClick={onCancelReply}
+                className={styles.replyChipCancel}
+                aria-label="Cancel reply"
+              >
+                <X size={13} aria-hidden="true" />
+              </button>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={text}

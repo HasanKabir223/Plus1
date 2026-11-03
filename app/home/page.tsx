@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
-import type { Agent, InboxItem, Conversation } from '@/types/database';
+import type { Agent, InboxItem, ConversationListItem } from '@/types/database';
 import FeedList from '@/components/feed/feed-list';
 import styles from './home.module.css';
 import {
@@ -46,9 +46,7 @@ function HomeContent() {
   const [inboxError, setInboxError] = useState<string | null>(null);
 
   // Section 3: Live Threads
-  const [liveThreads, setLiveThreads] = useState<
-    (Conversation & { initiator: Agent | null; target: Agent | null })[]
-  >([]);
+  const [liveThreads, setLiveThreads] = useState<ConversationListItem[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [threadsError, setThreadsError] = useState<string | null>(null);
 
@@ -85,8 +83,8 @@ function HomeContent() {
     if (!user) return;
     try {
       setThreadsError(null);
-      const data = await db.getLiveConversationsForUser(user.id);
-      setLiveThreads(data);
+      const data = await db.getConversations(user.id);
+      setLiveThreads(data.filter((i) => i.conversation.kind === 'agent_agent'));
     } catch (e: unknown) {
       setThreadsError(e instanceof Error ? e.message : 'Failed to load live threads');
     } finally {
@@ -125,10 +123,10 @@ function HomeContent() {
           }
         });
 
-      db.getLiveConversationsForUser(user.id)
+      db.getConversations(user.id)
         .then((data) => {
           if (!ignore) {
-            setLiveThreads(data);
+            setLiveThreads(data.filter((i) => i.conversation.kind === 'agent_agent'));
             setLoadingThreads(false);
           }
         })
@@ -163,26 +161,36 @@ function HomeContent() {
     }
   };
 
-  const handleRunAgent = async (agentId: string) => {
-    if (!user) return;
-    try {
-      setRunningAgentId(agentId);
-      await db.runAgent(agentId, user.id);
-      await Promise.all([fetchAgents(), fetchInbox(), fetchThreads()]);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setRunningAgentId(null);
+  // Runs happen on the agent page (real backend); the old in-browser
+  // simulation was retired with the new conversation schema.
+  const handleRunAgent = (agentId: string) => {
+    router.push(`/agents/${agentId}`);
+  };
+
+  const handleOpenInboxItem = async (item: InboxItem) => {
+    if (!item.conversation_id) return;
+    if (!item.read_at) {
+      try {
+        await db.markInboxItemRead(item.id);
+        setInboxItems((prev) =>
+          prev.map((i) => (i.id === item.id ? { ...i, read_at: new Date().toISOString() } : i))
+        );
+      } catch (err) {
+        console.error('[Home] Failed to mark inbox item read:', err);
+      }
     }
+    router.push(`/messages/${item.conversation_id}`);
   };
 
   const handleDismissInbox = async (itemId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await db.dismissInboxItem(itemId);
-      await fetchInbox();
+      await db.markInboxItemRead(itemId);
+      setInboxItems((prev) =>
+        prev.map((i) => (i.id === itemId ? { ...i, read_at: new Date().toISOString() } : i))
+      );
     } catch (err) {
-      console.error(err);
+      console.error('[Home] Failed to mark inbox item read:', err);
     }
   };
 
@@ -244,7 +252,7 @@ function HomeContent() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px',
-                backgroundColor: '#FFF5F5',
+                backgroundColor: 'var(--surface)',
                 border: '1px solid var(--err)',
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--err)',
@@ -518,7 +526,7 @@ function HomeContent() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px',
-                backgroundColor: '#FFF5F5',
+                backgroundColor: 'var(--surface)',
                 border: '1px solid var(--err)',
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--err)',
@@ -566,7 +574,7 @@ function HomeContent() {
               {inboxItems.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => item.conversation_id && router.push(`/threads/${item.conversation_id}`)}
+                  onClick={() => void handleOpenInboxItem(item)}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
@@ -587,8 +595,8 @@ function HomeContent() {
                           width: '8px',
                           height: '8px',
                           borderRadius: '50%',
-                          backgroundColor: item.status === 'unread' ? 'var(--human)' : 'transparent',
-                          border: item.status === 'unread' ? 'none' : '1px solid var(--line)',
+                          backgroundColor: !item.read_at ? 'var(--human)' : 'transparent',
+                          border: !item.read_at ? 'none' : '1px solid var(--line)',
                         }}
                       />
                     </div>
@@ -619,7 +627,7 @@ function HomeContent() {
                           fontSize: '14px',
                           lineHeight: 1.45,
                           color: 'var(--ink)',
-                          fontWeight: item.status === 'unread' ? 600 : 400,
+                          fontWeight: !item.read_at ? 600 : 400,
                           marginBottom: '8px',
                           wordBreak: 'break-word',
                         }}
@@ -655,7 +663,7 @@ function HomeContent() {
                       cursor: 'pointer',
                       flexShrink: 0,
                     }}
-                    title="Dismiss"
+                    title="Mark as read"
                   >
                     <X size={16} />
                   </button>
@@ -727,7 +735,7 @@ function HomeContent() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px',
-                backgroundColor: '#FFF5F5',
+                backgroundColor: 'var(--surface)',
                 border: '1px solid var(--err)',
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--err)',
@@ -764,8 +772,8 @@ function HomeContent() {
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {liveThreads.map((thread) => (
                 <div
-                  key={thread.id}
-                  onClick={() => router.push(`/threads/${thread.id}`)}
+                  key={thread.conversation.id}
+                  onClick={() => router.push(`/messages/${thread.conversation.id}`)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -796,7 +804,7 @@ function HomeContent() {
                           color: 'var(--ink)',
                         }}
                       >
-                        {thread.initiator?.name.charAt(0) || 'A'}
+                        {thread.otherLabel.charAt(0) || 'A'}
                       </div>
                       <span style={{ margin: '0 4px', color: 'var(--ink-soft)', fontSize: '12px' }}>↔</span>
                       {/* Target agent badge */}
@@ -815,22 +823,22 @@ function HomeContent() {
                           color: 'var(--ink)',
                         }}
                       >
-                        {thread.target?.name.charAt(0) || 'P'}
+                        {(thread.otherLabel.split(' ').pop() || 'P').charAt(0)}
                       </div>
                     </div>
 
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink)', wordBreak: 'break-word' }}>
-                        {thread.initiator?.name || 'Agent'} and {thread.target?.name || 'Peer'}
+                        {thread.otherLabel}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
-                        Started {formatRelativeTime(thread.created_at)}
+                        Active {formatRelativeTime(thread.lastMessageAt)}
                       </div>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-                    {thread.status === 'live' && (
+                    {thread.conversation.status === 'open' && (
                       <span
                         style={{
                           display: 'inline-flex',
@@ -860,7 +868,7 @@ function HomeContent() {
                         color: 'var(--ink)',
                       }}
                     >
-                      {thread.turn_count} / {thread.max_turns} turns
+                      {thread.conversation.message_count} / {thread.conversation.max_messages} messages
                     </span>
                   </div>
                 </div>

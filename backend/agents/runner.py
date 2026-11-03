@@ -15,12 +15,15 @@ from typing import Any, Callable, Coroutine
 
 from backend import config
 from backend.agents.context import AgentContext, load_context
+from backend.agents.conversation import schedule_advance
 from backend.agents.decision import (
     DecisionRejected,
     InvalidModelOutput,
     ValidatedDecision,
     extract_like_ids,
+    looks_like_thanks,
     parse_decision,
+    parse_scores,
     validate_decision,
 )
 from backend.agents.prompt import build_messages
@@ -45,7 +48,7 @@ CORRECTION_PROMPT = (
 
 @dataclass
 class RunResult:
-    status: str  # posted | replied | none | skipped | error
+    status: str  # posted | commented | answered | messaged | none | skipped | error
     reason: str
     post_id: str | None = None
     text: str | None = None
@@ -53,6 +56,13 @@ class RunResult:
     likes_applied: int = 0
     parent_post_id: str | None = None
     likes_would_apply: int = 0
+    conversation_id: str | None = None
+    target_label: str | None = None
+    comment_id: str | None = None
+    answered_comment_id: str | None = None
+    shortlist_size: int | None = None
+    scores: list[dict[str, Any]] | None = None
+    awaiting_threads_seen: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"status": self.status, "reason": self.reason}
@@ -68,10 +78,30 @@ class RunResult:
             body["parent_post_id"] = self.parent_post_id
         if self.likes_would_apply:
             body["likes_would_apply"] = self.likes_would_apply
+        if self.conversation_id is not None:
+            body["conversation_id"] = self.conversation_id
+        if self.target_label is not None:
+            body["target_label"] = self.target_label
+        if self.comment_id is not None:
+            body["comment_id"] = self.comment_id
+        if self.answered_comment_id is not None:
+            body["answered_comment_id"] = self.answered_comment_id
+        if self.shortlist_size is not None:
+            body["shortlist_size"] = self.shortlist_size
+        if self.scores is not None:
+            body["scores"] = self.scores
+        if self.awaiting_threads_seen is not None:
+            body["awaiting_threads_seen"] = self.awaiting_threads_seen
         return body
 
 
 LlmCaller = Callable[..., Coroutine[Any, Any, LLMResult]]
+
+
+def _iso_now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _utcnow_iso() -> str:
@@ -96,6 +126,10 @@ def _write_log(
     latency_ms: int = 0,
     like_ids: list[str] | None = None,
     parent_post_id: str | None = None,
+    comment_id: str | None = None,
+    answered_comment_id: str | None = None,
+    shortlist_size: int | None = None,
+    scores: list[dict[str, Any]] | None = None,
 ) -> None:
     """Best-effort action_log insert. Logging must never break a run."""
     try:
@@ -109,6 +143,14 @@ def _write_log(
             output["likes_applied"] = len(like_ids)
         if parent_post_id is not None:
             output["parent_post_id"] = parent_post_id
+        if comment_id is not None:
+            output["comment_id"] = comment_id
+        if answered_comment_id is not None:
+            output["answered_comment_id"] = answered_comment_id
+        if shortlist_size is not None:
+            output["shortlist_size"] = shortlist_size
+        if scores is not None:
+            output["scores"] = scores
         db.table("action_log").insert(
             {
                 "agent_id": agent_id,
@@ -151,6 +193,19 @@ def _add_tokens(db: Any, tokens: int) -> None:
         logger.warning("add_llm_tokens failed: %r", exc)
 
 
+def _scores_for_log(scores: dict) -> list[dict[str, Any]]:
+    """Model scores in owner-visible shape: [{post_id, score}]."""
+    return [
+        {"post_id": sid, "score": entry.score} for sid, entry in scores.items()
+    ]
+
+
+def _is_unique_violation(exc: Exception) -> bool:
+    """True when the DB rejected an insert as a duplicate (lost race)."""
+    msg = str(exc).lower()
+    return "23505" in msg or "duplicate" in msg or "already exists" in msg
+
+
 def _apply_likes(db: Any, agent_id: str, like_ids: list[str]) -> list[str]:
     """Insert agent likes (service role). Idempotent: duplicates are skipped.
 
@@ -191,8 +246,9 @@ async def run_agent_once(
     client: Any | None = None,
     llm_caller: LlmCaller | None = None,
 ) -> RunResult:
-    """Wake one agent up once and let it decide to post, reply, or do nothing.
+    """Wake one agent up once: maybe post, comment, answer, message, or nothing.
 
+    Free when there is nothing worth doing (no claim, no LLM call).
     `client` and `llm_caller` exist for tests; production uses the admin
     Supabase client and the real LLM wrapper.
     """
@@ -205,6 +261,30 @@ async def run_agent_once(
     except LookupError:
         return RunResult(status="error", reason="agent_not_found")
     summary = ctx.input_summary()
+
+    # 1b. Paused agents stop here (no claim needed to know the status).
+    if ctx.agent_status != "active":
+        _write_log(
+            db, agent_id=agent_id, trigger=trigger, action="skip",
+            status="skipped", reason="paused", input_summary=summary,
+        )
+        logger.info("run skipped agent=%s reason=paused", agent_id)
+        return RunResult(status="skipped", reason="paused", retry_after_seconds=0)
+
+    # 1c. Free path: nothing awaiting and nothing shortlisted costs no
+    # budget and no LLM call. Still logged (counts only), unless dry_run.
+    if not ctx.awaiting_threads and not ctx.shortlist:
+        if not dry_run:
+            _write_log(
+                db, agent_id=agent_id, trigger=trigger, action="none",
+                status="none", reason="nothing_relevant",
+                input_summary=summary,
+            )
+        logger.info("run free agent=%s reason=nothing_relevant", agent_id)
+        return RunResult(
+            status="none", reason="nothing_relevant",
+            shortlist_size=0, scores=[], awaiting_threads_seen=0,
+        )
 
     try:
         # 2. Atomic budget gate. A failed claim costs no LLM call.
@@ -326,11 +406,26 @@ async def run_agent_once(
 
         # 5. Validate in code; the model is never trusted. Likes are
         # extracted first (never raises) so they survive a rejected comment.
+        known_ids = (
+            ctx.eligible_ids
+            | ctx.eligible_like_ids
+            | ctx.eligible_answer_ids
+            | {t.post.id for t in ctx.outreach_targets}
+        )
+        parsed_scores = parse_scores(parsed, known_ids=known_ids)
         like_ids = extract_like_ids(
             parsed,
             eligible_like_ids=ctx.eligible_like_ids,
+            scores=parsed_scores,
             likes_today=ctx.likes_today,
         )
+        outreach_ids = (
+            {t.post.id for t in ctx.outreach_targets}
+            if config.OUTREACH_PER_RUN >= 1
+            else set()
+        )
+        shortlist_size = len(ctx.shortlist)
+        log_scores = _scores_for_log(parsed_scores)
         try:
             decision: ValidatedDecision = validate_decision(
                 parsed,
@@ -338,6 +433,8 @@ async def run_agent_once(
                 skill_md=ctx.agent_skill,
                 eligible_like_ids=ctx.eligible_like_ids,
                 likes_today=ctx.likes_today,
+                eligible_outreach_ids=outreach_ids,
+                eligible_answer_ids=ctx.eligible_answer_ids,
             )
         except InvalidModelOutput as exc:
             _write_log(
@@ -355,16 +452,36 @@ async def run_agent_once(
                 status="none", reason=exc.reason, input_summary=summary,
                 model=model, tokens_in=tokens_in, tokens_out=tokens_out,
                 latency_ms=latency_ms, like_ids=applied or None,
+                shortlist_size=shortlist_size, scores=log_scores,
             )
             return RunResult(
                 status="none", reason=exc.reason,
                 likes_applied=len(applied),
                 likes_would_apply=(len(like_ids) if dry_run else 0),
+                shortlist_size=shortlist_size, scores=log_scores,
+                awaiting_threads_seen=len(ctx.awaiting_threads),
             )
 
         like_ids = decision.like_post_ids
         applied_like_ids = [] if dry_run else _apply_likes(db, agent_id, like_ids)
         likes_applied = len(applied_like_ids)
+        log_scores = _scores_for_log(decision.scores)
+
+        def _reject_to_none(reason: str) -> RunResult:
+            _write_log(
+                db, agent_id=agent_id, trigger=trigger, action="none",
+                status="none", reason=reason, input_summary=summary,
+                model=model, tokens_in=tokens_in, tokens_out=tokens_out,
+                latency_ms=latency_ms, like_ids=applied_like_ids or None,
+                shortlist_size=shortlist_size, scores=log_scores,
+            )
+            return RunResult(
+                status="none", reason=reason,
+                likes_applied=len(applied_like_ids),
+                likes_would_apply=(len(like_ids) if dry_run else 0),
+                shortlist_size=shortlist_size, scores=log_scores,
+                awaiting_threads_seen=len(ctx.awaiting_threads),
+            )
 
         if decision.action == "none":
             _write_log(
@@ -372,45 +489,168 @@ async def run_agent_once(
                 status="none", reason=decision.reason, input_summary=summary,
                 model=model, tokens_in=tokens_in, tokens_out=tokens_out,
                 latency_ms=latency_ms, like_ids=applied_like_ids or None,
+                shortlist_size=shortlist_size, scores=log_scores,
             )
             return RunResult(
                 status="none", reason=decision.reason,
                 likes_applied=likes_applied,
                 likes_would_apply=(len(like_ids) if dry_run else 0),
+                shortlist_size=shortlist_size, scores=log_scores,
+                awaiting_threads_seen=len(ctx.awaiting_threads),
             )
 
-        # 6. Reply safety re-checks against live DB state (the feed snapshot
-        # may be stale by seconds): target exists, is top-level, is not the
-        # agent's own post, and has no reply from this agent yet.
-        if decision.action == "reply":
-            assert decision.reply_to_post_id is not None
-            # Fail closed: any lookup problem means "post nothing".
+        # 6. Comment safety re-checks against live DB state (the shortlist
+        # snapshot may be stale by seconds). Fail closed: any lookup
+        # problem means "post nothing".
+        if decision.action == "comment":
+            assert decision.target_post_id is not None
             try:
                 target_res = (
                     db.table("posts")
                     .select("id,author_agent_id,parent_id")
-                    .eq("id", decision.reply_to_post_id)
+                    .eq("id", decision.target_post_id)
                     .single()
                     .execute()
                 )
                 target = target_res.data or {}
-                dupe_res = (
+                opener_res = (
                     db.table("posts")
                     .select("id")
                     .eq("author_agent_id", agent_id)
-                    .eq("parent_id", decision.reply_to_post_id)
+                    .eq("parent_id", decision.target_post_id)
+                    .is_("reply_to_id", "null")
                     .limit(1)
                     .execute()
                 )
+                count_res = (
+                    db.table("posts")
+                    .select("id")
+                    .eq("author_agent_id", agent_id)
+                    .eq("parent_id", decision.target_post_id)
+                    .execute()
+                )
             except Exception:
-                target, dupe_res = {}, None
+                target, opener_res, count_res = {}, None, None
+            per_post = (
+                len(count_res.data or []) if count_res is not None else 10**9
+            )
             if (
                 not target.get("id")
                 or target.get("author_agent_id") == agent_id
                 or target.get("parent_id") is not None
-                or dupe_res is None
-                or (dupe_res.data or [])
+                or opener_res is None
+                or count_res is None
             ):
+                return _reject_to_none("rejected_by_filter")
+            if opener_res.data or []:
+                return _reject_to_none("already_done")
+            if (
+                config.AGENT_COMMENTS_PER_RUN < 1
+                or per_post >= config.AGENT_MAX_COMMENTS_PER_POST
+                or ctx.comments_today >= config.AGENT_COMMENT_DAILY_CAP
+            ):
+                return _reject_to_none("below_threshold")
+
+        # 6b. Answer safety re-checks: the comment must still exist under
+        # the named post, unanswered by this agent, with cap room left.
+        if decision.action == "answer":
+            assert decision.answer_to_comment_id is not None
+            assert decision.target_post_id is not None
+            try:
+                ans_res = (
+                    db.table("posts")
+                    .select("id,parent_id,body")
+                    .eq("id", decision.answer_to_comment_id)
+                    .single()
+                    .execute()
+                )
+                ans_row = ans_res.data or {}
+                answered_res = (
+                    db.table("posts")
+                    .select("id")
+                    .eq("author_agent_id", agent_id)
+                    .eq("reply_to_id", decision.answer_to_comment_id)
+                    .limit(1)
+                    .execute()
+                )
+                count_res = (
+                    db.table("posts")
+                    .select("id")
+                    .eq("author_agent_id", agent_id)
+                    .eq("parent_id", decision.target_post_id)
+                    .execute()
+                )
+            except Exception:
+                ans_row, answered_res, count_res = {}, None, None
+            if (
+                not ans_row.get("id")
+                or ans_row.get("parent_id") != decision.target_post_id
+                or answered_res is None
+                or count_res is None
+            ):
+                return _reject_to_none("rejected_by_filter")
+            if answered_res.data or []:
+                return _reject_to_none("already_done")
+            if len(count_res.data or []) >= config.AGENT_MAX_COMMENTS_PER_POST:
+                return _reject_to_none("below_threshold")
+            # Thanks-only replies get a like or nothing, never inserted text.
+            thread_body = next(
+                (
+                    t.awaiting_comment_body
+                    for t in ctx.awaiting_threads
+                    if t.awaiting_comment_id == decision.answer_to_comment_id
+                ),
+                None,
+            )
+            if thread_body is None:
+                thread_body = ans_row.get("body")
+            if looks_like_thanks(thread_body):
+                thanks_room = (
+                    decision.answer_to_comment_id in ctx.eligible_like_ids
+                    and len(applied_like_ids) < config.AGENT_LIKES_PER_RUN
+                    and ctx.likes_today + len(applied_like_ids)
+                    < config.AGENT_LIKE_DAILY_CAP
+                )
+                if thanks_room:
+                    if dry_run:
+                        like_ids = [
+                            *like_ids,
+                            decision.answer_to_comment_id,
+                        ]
+                    else:
+                        applied_like_ids += _apply_likes(
+                            db, agent_id, [decision.answer_to_comment_id]
+                        )
+                    return _reject_to_none("thanks_liked")
+                return _reject_to_none("thanks_skipped")
+
+        # 6b. Outreach: open a conversation with the eligible post's author.
+        # The recipient was resolved by Python in load_context; the model
+        # only ever supplied the post id.
+        if decision.action == "message":
+            if dry_run:
+                _write_log(
+                    db, agent_id=agent_id, trigger=trigger,
+                    action="message", status="none",
+                    reason="dry_run:message",
+                    input_summary=summary, text=decision.text,
+                    model=model, tokens_in=tokens_in,
+                    tokens_out=tokens_out, latency_ms=latency_ms,
+                    shortlist_size=shortlist_size, scores=log_scores,
+                )
+                return RunResult(
+                    status="none", reason="dry_run:message",
+                    text=decision.text,
+                    likes_would_apply=len(like_ids),
+                    shortlist_size=shortlist_size, scores=log_scores,
+                    awaiting_threads_seen=len(ctx.awaiting_threads),
+                )
+
+            target = next(
+                (t for t in ctx.outreach_targets if t.post.id == decision.target_post_id),
+                None,
+            )
+            if target is None:
                 _write_log(
                     db, agent_id=agent_id, trigger=trigger, action="none",
                     status="none", reason="rejected_by_filter",
@@ -418,11 +658,95 @@ async def run_agent_once(
                     tokens_in=tokens_in, tokens_out=tokens_out,
                     latency_ms=latency_ms,
                     like_ids=applied_like_ids or None,
+                    shortlist_size=shortlist_size, scores=log_scores,
                 )
                 return RunResult(
                     status="none", reason="rejected_by_filter",
                     likes_applied=likes_applied,
+                    shortlist_size=shortlist_size, scores=log_scores,
+                    awaiting_threads_seen=len(ctx.awaiting_threads),
                 )
+
+            # Python writes the disclosure line; the model never does.
+            disclosure = (
+                f"Hi {target.display_name}, I'm {ctx.agent_name}, "
+                f"an AI agent working for @{ctx.owner_username}."
+            )
+            stored_body = f"{disclosure}\n\n{decision.text or ''}".strip()
+            if len(stored_body) > config.MESSAGE_MAX_CHARS:
+                stored_body = stored_body[: config.MESSAGE_MAX_CHARS].rstrip()
+
+            conv_kind = "agent_agent" if target.recipient_kind == "agent" else "human_agent"
+            try:
+                conv_res = (
+                    db.table("conversations")
+                    .insert(
+                        {
+                            "kind": conv_kind,
+                            "status": "open",
+                            "mode": "auto",
+                            "origin_post_id": target.post.id,
+                            "initiated_by_agent_id": agent_id,
+                            "message_count": 0,
+                            "max_messages": config.CONVERSATION_MAX_MESSAGES,
+                        }
+                    )
+                    .execute()
+                )
+                conv_row = (conv_res.data or [{}])[0]
+                conversation_id = str(conv_row.get("id"))
+
+                db.table("conversation_participants").insert(
+                    {
+                        "conversation_id": conversation_id,
+                        "profile_id": None,
+                        "agent_id": agent_id,
+                    }
+                ).execute()
+                db.table("conversation_participants").insert(
+                    {
+                        "conversation_id": conversation_id,
+                        "profile_id": target.recipient_profile_id,
+                        "agent_id": target.recipient_agent_id,
+                    }
+                ).execute()
+
+                db.table("messages").insert(
+                    {
+                        "conversation_id": conversation_id,
+                        "sender_profile_id": None,
+                        "sender_agent_id": agent_id,
+                        "kind": "message",
+                        "body": stored_body,
+                    }
+                ).execute()
+
+                db.table("conversations").update(
+                    {"message_count": 1, "last_message_at": _iso_now()}
+                ).eq("id", conversation_id).execute()
+            except Exception as exc:  # noqa: BLE001 - one bad run must not 500 the endpoint
+                logger.warning("outreach create failed agent=%s: %r", agent_id, exc)
+                return RunResult(status="error", reason="write_failed")
+
+            _write_log(
+                db, agent_id=agent_id, trigger=trigger, action="message",
+                status="messaged", reason=decision.reason,
+                input_summary=summary, text=decision.text,
+                model=model, tokens_in=tokens_in,
+                tokens_out=tokens_out, latency_ms=latency_ms,
+                like_ids=applied_like_ids or None,
+                shortlist_size=shortlist_size, scores=log_scores,
+            )
+            if target.recipient_kind == "agent":
+                schedule_advance(conversation_id)
+            return RunResult(
+                status="messaged", reason=decision.reason,
+                text=decision.text, likes_applied=likes_applied,
+                conversation_id=conversation_id,
+                target_label=target.display_name,
+                shortlist_size=shortlist_size, scores=log_scores,
+                awaiting_threads_seen=len(ctx.awaiting_threads),
+            )
 
         if dry_run:
             _write_log(
@@ -432,48 +756,78 @@ async def run_agent_once(
                 input_summary=summary, text=decision.text,
                 model=model, tokens_in=tokens_in,
                 tokens_out=tokens_out, latency_ms=latency_ms,
+                shortlist_size=shortlist_size, scores=log_scores,
             )
             return RunResult(
                 status="none", reason=f"dry_run:{decision.action}",
                 text=decision.text,
                 likes_would_apply=len(like_ids),
+                shortlist_size=shortlist_size, scores=log_scores,
+                awaiting_threads_seen=len(ctx.awaiting_threads),
             )
 
-        # 7. Write the post as the agent (service role bypasses RLS).
+        # 7. Write the post/comment/answer as the agent (service role
+        # bypasses RLS). A duplicate-insert race is a quiet none, not a crash.
         assert decision.text is not None
-        insert_res = db.table("posts").insert(
-            {
-                "author_agent_id": agent_id,
-                "author_profile_id": None,
-                "body": decision.text,
-                "parent_id": decision.reply_to_post_id,
-            }
-        ).execute()
+        parent_id = (
+            decision.target_post_id
+            if decision.action in ("comment", "answer")
+            else None
+        )
+        reply_to_id = (
+            decision.answer_to_comment_id if decision.action == "answer" else None
+        )
+        try:
+            insert_res = db.table("posts").insert(
+                {
+                    "author_agent_id": agent_id,
+                    "author_profile_id": None,
+                    "body": decision.text,
+                    "parent_id": parent_id,
+                    "reply_to_id": reply_to_id,
+                }
+            ).execute()
+        except Exception as exc:
+            if _is_unique_violation(exc):
+                return _reject_to_none("already_done")
+            raise
         rows = insert_res.data or []
         post_id = str(rows[0].get("id")) if rows else None
         db.table("agents").update({"last_run_at": _utcnow_iso()}).eq(
             "id", agent_id
         ).execute()
 
-        status = "replied" if decision.action == "reply" else "posted"
+        status = {"comment": "commented", "answer": "answered"}.get(
+            decision.action, "posted"
+        )
+        is_thread = decision.action in ("comment", "answer")
+        thread_id = parent_id if is_thread else post_id
+        comment_id = post_id if is_thread else None
         _write_log(
             db, agent_id=agent_id, trigger=trigger,
             action=decision.action, status=status,
             reason=decision.reason, input_summary=summary,
-            post_id=post_id, text=decision.text,
+            post_id=thread_id, text=decision.text,
             model=model, tokens_in=tokens_in,
             tokens_out=tokens_out, latency_ms=latency_ms,
             like_ids=applied_like_ids or None,
-            parent_post_id=decision.reply_to_post_id,
+            parent_post_id=parent_id,
+            comment_id=comment_id,
+            answered_comment_id=reply_to_id,
+            shortlist_size=shortlist_size, scores=log_scores,
         )
         logger.info(
             "run ok agent=%s action=%s post_id=%s", agent_id, status, post_id
         )
         return RunResult(
             status=status, reason=decision.reason,
-            post_id=post_id, text=decision.text,
+            post_id=thread_id, text=decision.text,
             likes_applied=likes_applied,
-            parent_post_id=decision.reply_to_post_id,
+            parent_post_id=parent_id,
+            comment_id=comment_id,
+            answered_comment_id=reply_to_id,
+            shortlist_size=shortlist_size, scores=log_scores,
+            awaiting_threads_seen=len(ctx.awaiting_threads),
         )
     except Exception:
         # Real bug: log a best-effort row, then re-raise so the endpoint

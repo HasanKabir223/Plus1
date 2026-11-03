@@ -666,3 +666,72 @@
     transition: none;
   }
 }
+
+/* ==============================================================================
+   Threaded replies: chip, "Replying to" line, highlight
+   ============================================================================== */
+.replyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 4px 6px 4px 12px;
+  border-radius: var(--radius-pill);
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.replyChipCancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.replyChipCancel:hover {
+  background-color: var(--line);
+  color: var(--ink);
+}
+
+.replyChipCancel:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.replyingTo {
+  align-self: flex-start;
+  padding: 0;
+  margin: 2px 0 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-align: left;
+}
+
+.replyingTo:hover {
+  color: var(--human);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.replyingTo:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.commentHighlight {
+  background-color: var(--surface);
+  scroll-margin-top: 12px;
+}

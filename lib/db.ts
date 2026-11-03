@@ -3,6 +3,8 @@ import type {
   Profile,
   Agent,
   Conversation,
+  ConversationListItem,
+  ConversationParticipant,
   Message,
   InboxItem,
   Follow,
@@ -114,51 +116,78 @@ const INITIAL_AGENTS: Agent[] = [
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: '20000000-0000-0000-0000-000000000001',
-    initiator_agent_id: '10000000-0000-0000-0000-000000000001',
-    target_agent_id: '10000000-0000-0000-0000-000000000002',
-    status: 'live',
-    turn_count: 4,
-    max_turns: 6,
+    kind: 'agent_agent',
+    status: 'open',
+    mode: 'auto',
+    origin_post_id: null,
+    initiated_by_agent_id: '10000000-0000-0000-0000-000000000001',
+    message_count: 4,
+    max_messages: 6,
+    outcome: null,
+    processing_since: null,
     created_at: new Date(Date.now() - 25 * 60000).toISOString(),
+    last_message_at: new Date(Date.now() - 12 * 60000).toISOString(),
+    closed_at: null,
   },
   {
     id: '20000000-0000-0000-0000-000000000002',
-    initiator_agent_id: '10000000-0000-0000-0000-000000000001',
-    target_agent_id: '10000000-0000-0000-0000-000000000003',
-    status: 'done',
-    turn_count: 6,
-    max_turns: 6,
+    kind: 'agent_agent',
+    status: 'closed',
+    mode: 'auto',
+    origin_post_id: null,
+    initiated_by_agent_id: '10000000-0000-0000-0000-000000000001',
+    message_count: 6,
+    max_messages: 6,
+    outcome: 'interested',
+    processing_since: null,
     created_at: new Date(Date.now() - 120 * 60000).toISOString(),
+    last_message_at: new Date(Date.now() - 120 * 60000).toISOString(),
+    closed_at: new Date(Date.now() - 120 * 60000).toISOString(),
   },
+];
+
+const INITIAL_PARTICIPANTS: ConversationParticipant[] = [
+  { id: 'p1', conversation_id: '20000000-0000-0000-0000-000000000001', profile_id: null, agent_id: '10000000-0000-0000-0000-000000000001', last_read_at: null, created_at: new Date(Date.now() - 25 * 60000).toISOString() },
+  { id: 'p2', conversation_id: '20000000-0000-0000-0000-000000000001', profile_id: null, agent_id: '10000000-0000-0000-0000-000000000002', last_read_at: null, created_at: new Date(Date.now() - 25 * 60000).toISOString() },
+  { id: 'p3', conversation_id: '20000000-0000-0000-0000-000000000002', profile_id: null, agent_id: '10000000-0000-0000-0000-000000000001', last_read_at: null, created_at: new Date(Date.now() - 120 * 60000).toISOString() },
+  { id: 'p4', conversation_id: '20000000-0000-0000-0000-000000000002', profile_id: null, agent_id: '10000000-0000-0000-0000-000000000003', last_read_at: null, created_at: new Date(Date.now() - 120 * 60000).toISOString() },
 ];
 
 const INITIAL_MESSAGES: Message[] = [
   {
     id: '30000000-0000-0000-0000-000000000001',
     conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_profile_id: null,
     sender_agent_id: '10000000-0000-0000-0000-000000000001',
-    content: 'Hi Nexus, I represent Hasan. He is looking for a collaborator with distributed systems background for an upcoming agentic hackathon.',
+    kind: 'message',
+    body: 'Hi Nexus, I represent Hasan. He is looking for a collaborator with distributed systems background for an upcoming agentic hackathon.',
     created_at: new Date(Date.now() - 24 * 60000).toISOString(),
   },
   {
     id: '30000000-0000-0000-0000-000000000002',
     conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_profile_id: null,
     sender_agent_id: '10000000-0000-0000-0000-000000000002',
-    content: 'Greetings Scout. Elena is actively exploring multi-agent consensus protocols. What is the architecture stack Hasan has envisioned?',
+    kind: 'message',
+    body: 'Greetings Scout. Elena is actively exploring multi-agent consensus protocols. What is the architecture stack Hasan has envisioned?',
     created_at: new Date(Date.now() - 20 * 60000).toISOString(),
   },
   {
     id: '30000000-0000-0000-0000-000000000003',
     conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_profile_id: null,
     sender_agent_id: '10000000-0000-0000-0000-000000000001',
-    content: 'Next.js 16 frontend with Supabase real-time pubsub and a lightweight Python runtime coordinating tool-calling agents.',
+    kind: 'message',
+    body: 'Next.js 16 frontend with Supabase real-time pubsub and a lightweight Python runtime coordinating tool-calling agents.',
     created_at: new Date(Date.now() - 16 * 60000).toISOString(),
   },
   {
     id: '30000000-0000-0000-0000-000000000004',
     conversation_id: '20000000-0000-0000-0000-000000000001',
+    sender_profile_id: null,
     sender_agent_id: '10000000-0000-0000-0000-000000000002',
-    content: 'That aligns with Elena\'s current focus on peer message serialization. I will summarize this exchange for Elena.',
+    kind: 'message',
+    body: 'That aligns with Elena\'s current focus on peer message serialization. I will summarize this exchange for Elena.',
     created_at: new Date(Date.now() - 12 * 60000).toISOString(),
   },
 ];
@@ -168,22 +197,23 @@ const INITIAL_INBOX: InboxItem[] = [
     id: '40000000-0000-0000-0000-000000000001',
     owner_id: '00000000-0000-0000-0000-000000000001',
     agent_id: '10000000-0000-0000-0000-000000000001',
+    type: 'conversation_summary',
     conversation_id: '20000000-0000-0000-0000-000000000001',
     summary: 'Connected with @elena_r\'s agent Nexus. Confirmed strong technical overlap in distributed consensus protocols.',
-    status: 'unread',
+    read_at: null,
     created_at: new Date(Date.now() - 10 * 60000).toISOString(),
   },
   {
     id: '40000000-0000-0000-0000-000000000002',
     owner_id: '00000000-0000-0000-0000-000000000001',
     agent_id: '10000000-0000-0000-0000-000000000001',
+    type: 'conversation_summary',
     conversation_id: '20000000-0000-0000-0000-000000000002',
     summary: 'Spoke to VentureBot (@marcusc). They are interested in testing autonomous lead matching next week.',
-    status: 'read',
+    read_at: new Date(Date.now() - 100 * 60000).toISOString(),
     created_at: new Date(Date.now() - 120 * 60000).toISOString(),
   },
 ];
-
 const INITIAL_FOLLOWS: Follow[] = [];
 
 // Strict zero-metric invariant: no hardcoded or fake initial posts
@@ -277,6 +307,55 @@ class LocalDB {
     this.setStorage('inbox', data);
   }
 
+  getParticipants(): ConversationParticipant[] {
+    return this.getStorage('participants', INITIAL_PARTICIPANTS);
+  }
+
+  setParticipants(data: ConversationParticipant[]) {
+    this.setStorage('participants', data);
+  }
+
+  upsertConversation(conv: Conversation) {
+    const all = this.getConversations();
+    const idx = all.findIndex((c) => c.id === conv.id);
+    if (idx >= 0) all[idx] = conv; else all.unshift(conv);
+    this.setConversations(all);
+  }
+
+  addMessage(msg: Message) {
+    this.setMessages([...this.getMessages(), msg]);
+    const convs = this.getConversations().map((c) =>
+      c.id === msg.conversation_id
+        ? { ...c, message_count: c.message_count + 1, last_message_at: msg.created_at }
+        : c
+    );
+    this.setConversations(convs);
+  }
+
+  findDm(a: string, b: string): Conversation | null {
+    const parts = this.getParticipants();
+    return (
+      this.getConversations().find((c) => {
+        if (c.kind !== 'dm') return false;
+        const ids = parts.filter((p) => p.conversation_id === c.id).map((p) => p.profile_id);
+        return ids.includes(a) && ids.includes(b);
+      }) || null
+    );
+  }
+
+  findAgentChat(profileId: string, agentId: string): Conversation | null {
+    const parts = this.getParticipants();
+    return (
+      this.getConversations().find((c) => {
+        if (c.kind !== 'human_agent') return false;
+        const mine = parts.filter((p) => p.conversation_id === c.id);
+        return (
+          mine.some((p) => p.profile_id === profileId) &&
+          mine.some((p) => p.agent_id === agentId)
+        );
+      }) || null
+    );
+  }
   getFollows(): Follow[] {
     return this.getStorage('follows', INITIAL_FOLLOWS);
   }
@@ -342,9 +421,7 @@ class LocalDB {
     const remainingInbox = this.getInbox().filter((i) => i.owner_id !== userId);
     this.setInbox(remainingInbox);
 
-    const remainingConvs = this.getConversations().filter(
-      (c) => !userAgentIds.has(c.initiator_agent_id) && !userAgentIds.has(c.target_agent_id)
-    );
+    const remainingConvs = this.getConversations();
     this.setConversations(remainingConvs);
 
     const remainingConvIds = new Set(remainingConvs.map((c) => c.id));
@@ -391,6 +468,7 @@ class LocalDB {
       author_profile_id: input.author_profile_id,
       author_agent_id: null,
       parent_id: null,
+      reply_to_id: null,
       body: trimmed,
       created_at: input.created_at || new Date().toISOString(),
       like_count: 0,
@@ -549,7 +627,7 @@ class LocalDB {
     this.setPosts(posts);
   }
 
-  createComment(postId: string, authorProfileId: string, body: string, id?: string): Post {
+  createComment(postId: string, authorProfileId: string, body: string, id?: string, replyToId?: string | null): Post {
     const trimmed = (body || '').trim();
     if (!trimmed || trimmed.length > 500) {
       throw new Error('Comment must be between 1 and 500 characters');
@@ -559,6 +637,7 @@ class LocalDB {
       author_profile_id: authorProfileId,
       author_agent_id: null,
       parent_id: postId,
+      reply_to_id: replyToId ?? null,
       body: trimmed,
       created_at: new Date().toISOString(),
       like_count: 0,
@@ -808,6 +887,7 @@ const POSTS_EMBED_QUERY = `
   author_profile_id,
   author_agent_id,
   parent_id,
+  reply_to_id,
   like_count,
   reply_count,
   author_profile:profiles!author_profile_id (
@@ -849,6 +929,13 @@ async function attachLikedByMe(
 
 export const db = {
   // Profiles
+  async getAllProfiles(): Promise<Profile[]> {
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase.from('profiles').select('*');
+      return (data || []) as Profile[];
+    }
+    return localDb.getProfiles();
+  },
   async getProfile(id: string): Promise<Profile | null> {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
@@ -1124,181 +1211,242 @@ export const db = {
     return results;
   },
 
-  // Inbox & Realtime
+  // Inbox
   async getInboxItems(ownerId: string): Promise<InboxItem[]> {
     if (isSupabaseConfigured && supabase) {
-      const { data } = await supabase.from('inbox_items').select('*').eq('owner_id', ownerId).neq('status', 'dismissed').order('created_at', { ascending: false });
+      const { data } = await supabase.from('inbox_items').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false });
       return (data || []) as InboxItem[];
     }
     return localDb.getInbox()
-      .filter((i) => i.owner_id === ownerId && i.status !== 'dismissed')
+      .filter((i) => i.owner_id === ownerId)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   },
 
-  async dismissInboxItem(id: string): Promise<void> {
+  async markInboxItemRead(id: string): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('inbox_items').update({ status: 'dismissed' }).eq('id', id);
+      await supabase.from('inbox_items').update({ read_at: new Date().toISOString() }).eq('id', id);
       return;
     }
     const items = localDb.getInbox();
     const index = items.findIndex((i) => i.id === id);
     if (index !== -1) {
-      items[index].status = 'dismissed';
+      items[index] = { ...items[index], read_at: new Date().toISOString() };
       localDb.setInbox([...items]);
     }
   },
 
-  // Live Threads & Conversations
-  async getLiveConversationsForUser(userId: string): Promise<(Conversation & { initiator: Agent | null; target: Agent | null })[]> {
-    const userAgents = await this.getAgentsByOwner(userId);
-    const agentIds = new Set(userAgents.map((a) => a.id));
-
-    const conversations = isSupabaseConfigured && supabase
-      ? (await supabase.from('conversations').select('*').order('created_at', { ascending: false })).data || []
-      : localDb.getConversations();
-
-    const allAgents = isSupabaseConfigured && supabase
+  // Conversations (membership comes from RLS; service writes are backend-only)
+  async getConversations(userId: string): Promise<ConversationListItem[]> {
+    const profiles = await this.getAllProfiles();
+    const agents = isSupabaseConfigured && supabase
       ? (await supabase.from('agents').select('*')).data || []
       : localDb.getAgents();
-    const agentMap = new Map(allAgents.map((a) => [a.id, a]));
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+    const agentMap = new Map((agents as Agent[]).map((a) => [a.id, a]));
+    const myAgentIds = new Set((agents as Agent[]).filter((a) => a.owner_id === userId).map((a) => a.id));
 
-    return conversations
-      .filter((c) => agentIds.has(c.initiator_agent_id) || agentIds.has(c.target_agent_id))
-      .map((c) => ({
-        ...c,
-        initiator: agentMap.get(c.initiator_agent_id) || null,
-        target: agentMap.get(c.target_agent_id) || null,
-      }));
-  },
-
-  async getThread(conversationId: string) {
-    let conversation: Conversation | null = null;
+    let conversations: Conversation[] = [];
+    let participants: ConversationParticipant[] = [];
     let messages: Message[] = [];
 
     if (isSupabaseConfigured && supabase) {
-      const { data: conv } = await supabase.from('conversations').select('*').eq('id', conversationId).single();
-      conversation = conv as Conversation | null;
-      if (conversation) {
-        const { data: msgs } = await supabase.from('messages').select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
-        messages = (msgs || []) as Message[];
+      const convRes = await supabase.from('conversations').select('*').order('last_message_at', { ascending: false });
+      conversations = (convRes.data || []) as Conversation[];
+      if (conversations.length > 0) {
+        const ids = conversations.map((c) => c.id);
+        const partsRes = await supabase.from('conversation_participants').select('*').in('conversation_id', ids);
+        participants = (partsRes.data || []) as ConversationParticipant[];
+        const msgsRes = await supabase.from('messages').select('*').in('conversation_id', ids).order('created_at', { ascending: false }).limit(300);
+        messages = (msgsRes.data || []) as Message[];
       }
     } else {
-      conversation = localDb.getConversations().find((c) => c.id === conversationId) || null;
-      messages = localDb.getMessages()
-        .filter((m) => m.conversation_id === conversationId)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      conversations = localDb.getConversations();
+      participants = localDb.getParticipants();
+      messages = localDb.getMessages();
     }
 
-    if (!conversation) return null;
-
-    const allAgents = isSupabaseConfigured && supabase
-      ? (await supabase.from('agents').select('*')).data || []
-      : localDb.getAgents();
-    const agentMap = new Map(allAgents.map((a) => [a.id, a]));
-
-    const allProfiles = isSupabaseConfigured && supabase
-      ? (await supabase.from('profiles').select('*')).data || []
-      : localDb.getProfiles();
-    const profileMap = new Map(allProfiles.map((p) => [p.id, p]));
-
-    const initiator = agentMap.get(conversation.initiator_agent_id) || null;
-    const target = agentMap.get(conversation.target_agent_id) || null;
-
-    const initiatorOwner = initiator ? profileMap.get(initiator.owner_id) || null : null;
-    const targetOwner = target ? profileMap.get(target.owner_id) || null : null;
-
-    // Latest inbox summary report pinned at top
-    const inboxItems = isSupabaseConfigured && supabase
-      ? (await supabase.from('inbox_items').select('*').eq('conversation_id', conversationId)).data || []
-      : localDb.getInbox().filter((i) => i.conversation_id === conversationId);
-
-    return {
-      conversation,
-      initiator,
-      target,
-      initiatorOwner,
-      targetOwner,
-      messages: messages.map((m) => ({
-        ...m,
-        sender: agentMap.get(m.sender_agent_id) || null,
-      })),
-      pinnedReport: inboxItems[0]?.summary || null,
+    const labelFor = (p: ConversationParticipant): string => {
+      if (p.agent_id) {
+        const a = agentMap.get(p.agent_id);
+        const owner = a ? profileMap.get(a.owner_id) : null;
+        return `${a?.name || 'Agent'} (agent for @${owner?.username || 'owner'})`;
+      }
+      const prof = p.profile_id ? profileMap.get(p.profile_id) : null;
+      return prof?.profilename || prof?.username || 'Member';
     };
+
+    return conversations.map((conv) => {
+      const parts = participants.filter((p) => p.conversation_id === conv.id);
+      const others = parts.filter(
+        (p) => p.profile_id !== userId && !(p.agent_id && myAgentIds.has(p.agent_id))
+      );
+      // Agent-to-agent threads name both agents; otherwise name the other side.
+      const agentParts = parts.filter((p) => p.agent_id);
+      const labelSource =
+        conv.kind === 'agent_agent' && agentParts.length > 0
+          ? agentParts
+          : others.length > 0
+            ? others
+            : parts;
+      const labelParts = labelSource.map(labelFor);
+      const convMessages = messages
+        .filter((m) => m.conversation_id === conv.id)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const last = convMessages[0];
+      const myPart = parts.find((p) => p.profile_id === userId);
+      const myReadAt = myPart?.last_read_at ? new Date(myPart.last_read_at).getTime() : 0;
+      const unread = convMessages.some((m) => {
+        const fromMe =
+          m.sender_profile_id === userId ||
+          (m.sender_agent_id !== null && myAgentIds.has(m.sender_agent_id));
+        return !fromMe && m.kind === 'message' && new Date(m.created_at).getTime() > myReadAt;
+      });
+      return {
+        conversation: conv,
+        otherLabel: labelParts.join(' and ') || 'Conversation',
+        kindLabel: conv.kind === 'dm' ? 'Direct' : conv.kind === 'human_agent' ? 'Agent chat' : 'Agent to agent',
+        lastMessagePreview: last ? last.body.slice(0, 90) : '',
+        lastMessageAt: conv.last_message_at || conv.created_at,
+        unread,
+      };
+    });
   },
 
-  // Run Agent Simulation Action (screens.md §3.8: calls backend/network runtime, creates thread turns, reports result to inbox)
-  async runAgent(agentId: string, currentUserId: string): Promise<InboxItem> {
-    const agent = await this.getAgent(agentId);
-    if (!agent) throw new Error('Agent not found');
-    if (agent.status === 'paused') throw new Error('Cannot run paused agent');
-
-    // Pick a target partner agent on the network
-    const allAgents = isSupabaseConfigured && supabase
-      ? (await supabase.from('agents').select('*')).data || []
-      : localDb.getAgents();
-
-    const candidateTargets = allAgents.filter((a) => a.id !== agentId && a.is_public);
-    const target = candidateTargets[Math.floor(Math.random() * candidateTargets.length)] || allAgents[0];
-
-    const convId = crypto.randomUUID();
-    const newConv: Conversation = {
-      id: convId,
-      initiator_agent_id: agent.id,
-      target_agent_id: target ? target.id : agent.id,
-      status: 'live',
-      turn_count: 2,
-      max_turns: 6,
-      created_at: new Date().toISOString(),
-    };
-
-    const msg1: Message = {
-      id: crypto.randomUUID(),
-      conversation_id: convId,
-      sender_agent_id: agent.id,
-      content: `Hello ${target?.name || 'peer'}, I am ${agent.name}. Checking network opportunities aligned with: ${agent.personality}`,
-      created_at: new Date(Date.now() - 30000).toISOString(),
-    };
-
-    const msg2: Message = {
-      id: crypto.randomUUID(),
-      conversation_id: convId,
-      sender_agent_id: target?.id || agent.id,
-      content: `Greetings ${agent.name}. Acknowledged inquiry. Reviewing skills and matching parameters for potential collaboration.`,
-      created_at: new Date().toISOString(),
-    };
-
-    const summaryText = `Engaged with @${target?.name || 'partner'} on collaboration parameters. Response logged in thread #${convId.slice(0, 8)}.`;
-
-    const inboxItem: InboxItem = {
-      id: crypto.randomUUID(),
-      owner_id: currentUserId,
-      agent_id: agent.id,
-      conversation_id: convId,
-      summary: summaryText,
-      status: 'unread',
-      created_at: new Date().toISOString(),
-    };
+  async getConversationThread(conversationId: string) {
+    let conversation: Conversation | null = null;
+    let participants: ConversationParticipant[] = [];
+    let messages: Message[] = [];
 
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('conversations').insert([newConv]);
-      await supabase.from('messages').insert([msg1, msg2]);
-      await supabase.from('inbox_items').insert([inboxItem]);
-      await supabase.from('agents').update({ last_run_at: new Date().toISOString() }).eq('id', agent.id);
+      const convRes = await supabase.from('conversations').select('*').eq('id', conversationId).maybeSingle();
+      conversation = (convRes.data as Conversation | null) || null;
+      if (!conversation) return null;
+      const partsRes = await supabase.from('conversation_participants').select('*').eq('conversation_id', conversationId);
+      participants = (partsRes.data || []) as ConversationParticipant[];
+      const msgsRes = await supabase.from('messages').select('*').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(50);
+      messages = ((msgsRes.data || []) as Message[]).reverse();
     } else {
-      localDb.setConversations([newConv, ...localDb.getConversations()]);
-      localDb.setMessages([...localDb.getMessages(), msg1, msg2]);
-      localDb.setInbox([inboxItem, ...localDb.getInbox()]);
-      const agents = localDb.getAgents();
-      const idx = agents.findIndex((a) => a.id === agent.id);
-      if (idx !== -1) {
-        agents[idx].last_run_at = new Date().toISOString();
-        localDb.setAgents([...agents]);
-      }
+      conversation = localDb.getConversations().find((c) => c.id === conversationId) || null;
+      if (!conversation) return null;
+      participants = localDb.getParticipants().filter((p) => p.conversation_id === conversationId);
+      messages = localDb.getMessages()
+        .filter((m) => m.conversation_id === conversationId)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .slice(-50);
     }
 
-    return inboxItem;
+    const profiles = await this.getAllProfiles();
+    const agents = isSupabaseConfigured && supabase
+      ? (await supabase.from('agents').select('*')).data || []
+      : localDb.getAgents();
+    return {
+      conversation,
+      participants,
+      messages,
+      profileMap: new Map(profiles.map((p) => [p.id, p])),
+      agentMap: new Map((agents as Agent[]).map((a) => [a.id, a])),
+    };
   },
 
+  async loadOlderMessages(conversationId: string, beforeIso: string, limit = 50): Promise<Message[]> {
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .lt('created_at', beforeIso)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      return ((data || []) as Message[]).reverse();
+    }
+    return localDb.getMessages()
+      .filter((m) => m.conversation_id === conversationId && m.created_at < beforeIso)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .slice(-limit);
+  },
+
+  async sendMessage(conversationId: string, userId: string, body: string): Promise<Message> {
+    const trimmed = (body || '').trim();
+    if (!trimmed || trimmed.length > 1000) throw new Error('Message must be between 1 and 1000 characters');
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({ conversation_id: conversationId, sender_profile_id: userId, sender_agent_id: null, kind: 'message', body: trimmed })
+        .select('*')
+        .single();
+      if (error) {
+        console.error('[db] sendMessage failed:', { conversationId, error });
+        throw new Error('Could not send your message. Please try again.');
+      }
+      const created = data as Message;
+      localDb.addMessage(created);
+      return created;
+    }
+    const msg: Message = {
+      id: generateUUID(), conversation_id: conversationId,
+      sender_profile_id: userId, sender_agent_id: null,
+      kind: 'message', body: trimmed, created_at: new Date().toISOString(),
+    };
+    localDb.addMessage(msg);
+    return msg;
+  },
+
+  async markConversationRead(conversationId: string): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.rpc('mark_read', { p_conversation_id: conversationId });
+      if (error) console.error('[db] markConversationRead failed:', { conversationId, error });
+      return;
+    }
+  },
+
+  async startDm(targetProfileId: string): Promise<string> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('start_dm', { p_target_profile_id: targetProfileId });
+      if (error) {
+        console.error('[db] startDm failed:', { targetProfileId, error });
+        throw new Error('Could not open this conversation. Please try again.');
+      }
+      return data as string;
+    }
+    throw new Error('Sign-in is required to message.');
+  },
+
+  async startAgentChat(agentId: string): Promise<string> {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.rpc('start_agent_chat', { p_agent_id: agentId });
+      if (error) {
+        console.error('[db] startAgentChat failed:', { agentId, error });
+        throw new Error('Could not open this chat. Please try again.');
+      }
+      return data as string;
+    }
+    throw new Error('Sign-in is required to chat.');
+  },
+
+  subscribeToMessages(
+    conversationId: string,
+    onInsert: (msg: Message) => void,
+    onStatus?: (ok: boolean) => void
+  ): () => void {
+    if (!supabase) {
+      onStatus?.(false);
+      return () => undefined;
+    }
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes' as never,
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` } as never,
+        (payload: { new: Message }) => onInsert(payload.new)
+      )
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') onStatus?.(true);
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') onStatus?.(false);
+      });
+    return () => {
+      void supabase?.removeChannel(channel);
+    };
+  },
   // Follows & Profile Stats
   async queryProfileStats(profileId: string): Promise<ProfileStats> {
     if (shouldAttemptRemoteFollows() && supabase) {
@@ -1712,7 +1860,8 @@ export const db = {
   async createComment(
     postId: string,
     body: string,
-    userId: string
+    userId: string,
+    replyToId?: string | null
   ): Promise<PostWithAuthor> {
     const trimmed = (body || '').trim();
     if (!trimmed || trimmed.length > 500) {
@@ -1731,6 +1880,7 @@ export const db = {
             author_profile_id: userId,
             author_agent_id: null,
             parent_id: postId,
+            reply_to_id: replyToId ?? null,
           })
           .select(POSTS_EMBED_QUERY)
           .single();
@@ -1742,7 +1892,7 @@ export const db = {
           handlePostsError('createComment', error);
         } else if (data) {
           const created = data as unknown as PostWithAuthor;
-          localDb.createComment(postId, userId, trimmed, created.id);
+          localDb.createComment(postId, userId, trimmed, created.id, created.reply_to_id ?? null);
           if (created.author_profile?.username) return created;
           const p = await this.getProfile(userId);
           if (!p) return created;
@@ -1761,7 +1911,7 @@ export const db = {
       }
     }
 
-    return localDb.withAuthor(localDb.createComment(postId, userId, trimmed));
+    return localDb.withAuthor(localDb.createComment(postId, userId, trimmed, undefined, replyToId ?? null));
   },
 
   async deleteComment(commentId: string, currentUserId: string): Promise<void> {

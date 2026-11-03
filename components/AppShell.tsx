@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/db';
-import type { Agent, InboxItem } from '@/types/database';
+import type { Agent } from '@/types/database';
 import styles from './AppShell.module.css';
 import {
   Home,
@@ -15,6 +15,7 @@ import {
   Plus,
   LogOut,
   Play,
+  MessageCircle,
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -29,14 +30,14 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
   const { user, profile, signOut } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [userAgents, setUserAgents] = useState<Agent[]>([]);
-  const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
+
 
   // Load unread count and user agents from DB
   const loadSidebarData = async () => {
     if (!user) return;
     try {
       const items = await db.getInboxItems(user.id);
-      const unread = items.filter((i) => i.status === 'unread').length;
+      const unread = items.filter((i) => !i.read_at).length;
       setUnreadCount(unread);
 
       const agents = await db.getAgentsByOwner(user.id);
@@ -58,17 +59,10 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
     };
   }, [user]);
 
-  const handleQuickRun = async (agentId: string) => {
-    if (!user) return;
-    try {
-      setRunningAgentId(agentId);
-      await db.runAgent(agentId, user.id);
-      await loadSidebarData();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setRunningAgentId(null);
-    }
+  // Quick "run" navigates to the agent page, where the real backend Run
+  // lives (the old in-browser simulation was retired with the new schema).
+  const handleQuickRun = (agentId: string) => {
+    router.push(`/agents/${agentId}`);
   };
 
   const displayName = profile?.profilename || profile?.username || '';
@@ -77,6 +71,7 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
   const navItems = [
     { href: '/home', label: 'Home', icon: Home, badge: 0 },
     { href: '/explore', label: 'Explore', icon: Compass, badge: 0 },
+    { href: '/messages', label: 'Messages', icon: MessageCircle, badge: 0 },
     { href: '/home#inbox', label: 'Inbox', icon: Inbox, badge: unreadCount },
     { href: profile?.username ? `/u/${profile.username}` : '/onboarding', label: 'Profile', icon: User, badge: 0 },
   ];
@@ -216,7 +211,7 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
 
                 <button
                   onClick={() => handleQuickRun(agent.id)}
-                  disabled={runningAgentId === agent.id || agent.status === 'paused'}
+                  disabled={agent.status === 'paused'}
                   className="btn-secondary"
                   style={{
                     padding: '4px 10px',
@@ -224,13 +219,9 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
                     opacity: agent.status === 'paused' ? 0.5 : 1,
                   }}
                 >
-                  {runningAgentId === agent.id ? (
-                    'Running...'
-                  ) : (
-                    <>
-                      <Play size={12} /> Run
-                    </>
-                  )}
+                  <>
+                    <Play size={12} /> Run
+                  </>
                 </button>
               </div>
             ))

@@ -24,32 +24,62 @@ export type Agent = {
   created_at: string;
 };
 
+export type ConversationKind = 'dm' | 'human_agent' | 'agent_agent';
+export type ConversationStatus = 'open' | 'paused' | 'closed';
+
 export type Conversation = {
   id: string;
-  initiator_agent_id: string;
-  target_agent_id: string;
-  status: 'live' | 'done' | 'capped';
-  turn_count: number;
-  max_turns: number;
+  kind: ConversationKind;
+  status: ConversationStatus;
+  mode: 'auto' | 'human';
+  origin_post_id: string | null;
+  initiated_by_agent_id: string | null;
+  message_count: number;
+  max_messages: number;
+  outcome: 'interested' | 'not_a_fit' | 'undecided' | null;
+  processing_since: string | null;
+  created_at: string;
+  last_message_at: string;
+  closed_at: string | null;
+};
+
+export type ConversationParticipant = {
+  id: string;
+  conversation_id: string;
+  profile_id: string | null;
+  agent_id: string | null;
+  last_read_at: string | null;
   created_at: string;
 };
 
 export type Message = {
   id: string;
   conversation_id: string;
-  sender_agent_id: string;
-  content: string;
+  sender_profile_id: string | null;
+  sender_agent_id: string | null;
+  kind: 'message' | 'system';
+  body: string;
   created_at: string;
 };
 
 export type InboxItem = {
   id: string;
   owner_id: string;
-  agent_id: string;
-  conversation_id: string | null;
+  agent_id: string | null;
+  type: string;
   summary: string;
-  status: 'unread' | 'read' | 'dismissed';
+  conversation_id: string | null;
+  read_at: string | null;
   created_at: string;
+};
+
+export type ConversationListItem = {
+  conversation: Conversation;
+  otherLabel: string;
+  kindLabel: string;
+  lastMessagePreview: string;
+  lastMessageAt: string;
+  unread: boolean;
 };
 
 export type Follow = {
@@ -71,6 +101,10 @@ export type ActionLogEntry = {
     like_post_ids?: string[];
     likes_applied?: number;
     parent_post_id?: string | null;
+    comment_id?: string | null;
+    answered_comment_id?: string | null;
+    shortlist_size?: number;
+    scores?: { post_id: string; score: number }[];
   } | null;
   status: string | null;
   error: string | null;
@@ -96,6 +130,7 @@ export type Post = {
   author_profile_id: string | null;
   author_agent_id: string | null;
   parent_id: string | null;
+  reply_to_id: string | null;
   body: string;
   created_at: string;
   like_count: number;

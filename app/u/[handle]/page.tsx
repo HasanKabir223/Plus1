@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
-import type { Profile, Agent, Conversation, PostWithAuthor } from '@/types/database';
+import type { Profile, Agent, ConversationListItem, PostWithAuthor } from '@/types/database';
 import PostCard from '@/components/feed/post-card';
 import PostComposer from '@/components/feed/post-composer';
 import styles from './profile.module.css';
@@ -38,8 +38,8 @@ import {
  * - "Hasan Kabir" -> "HA"
  * - "hasankabir"  -> "HA"
  * - "Elena"       -> "EL"
- * - "José"        -> "JO"
- * - "Élise"       -> "ÉL"
+ * - "JosÃƒÆ’Ã‚Â©"        -> "JO"
+ * - "ÃƒÆ’Ã¢â‚¬Â°lise"       -> "ÃƒÆ’Ã¢â‚¬Â°L"
  * - "H"           -> "H"
  */
 function getAvatarLetters(displayName?: string | null): string {
@@ -73,7 +73,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [profile, setProfile] = useState<Profile | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [conversations, setConversations] = useState<
-    (Conversation & { initiator: Agent | null; target: Agent | null })[]
+    ConversationListItem[]
   >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +95,10 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+  const [isMessaging, setIsMessaging] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [chattingAgentId, setChattingAgentId] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   // Edit profile modal state (owner only)
   const [isEditing, setIsEditing] = useState(false);
@@ -189,8 +193,8 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
         setAgents(visibleAgents);
 
         try {
-          const convs = await db.getLiveConversationsForUser(p.id);
-          if (isMounted) setConversations(convs || []);
+          const convs = user ? await db.getConversations(user.id) : [];
+          if (isMounted) setConversations(convs.filter((i) => i.conversation.kind === 'agent_agent'));
         } catch {
           if (isMounted) setConversations([]);
         }
@@ -251,6 +255,44 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     };
     return db.subscribe('posts', refreshPosts);
   }, [profile?.id]);
+
+  const handleMessage = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (!profile || isMessaging) return;
+    setIsMessaging(true);
+    setMessageError(null);
+    try {
+      const convId = await db.startDm(profile.id);
+      router.push(`/messages/${convId}`);
+    } catch (err: unknown) {
+      console.error('[Profile] Failed to open conversation:', err);
+      setMessageError(err instanceof Error ? err.message : 'Could not open this conversation.');
+    } finally {
+      setIsMessaging(false);
+    }
+  };
+
+  const handleChat = async (agentId: string) => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (chattingAgentId) return;
+    setChattingAgentId(agentId);
+    setChatError(null);
+    try {
+      const convId = await db.startAgentChat(agentId);
+      router.push(`/messages/${convId}`);
+    } catch (err: unknown) {
+      console.error('[Profile] Failed to open agent chat:', err);
+      setChatError(err instanceof Error ? err.message : 'Could not open this chat.');
+    } finally {
+      setChattingAgentId(null);
+    }
+  };
 
   const handleToggleFollow = async () => {
     if (!user) {
@@ -362,9 +404,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
     if (!user) return;
     try {
       setRunningAgentId(agentId);
-      await db.runAgent(agentId, user.id);
-      const userAgents = await db.getAgentsByOwner(profile?.id || user.id);
-      setAgents(userAgents);
+      router.push(`/agents/${agentId}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -615,6 +655,22 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                     )}
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => void handleMessage()}
+                    disabled={isMessaging}
+                    className={styles.followingBtn}
+                    style={isMessaging ? { opacity: 0.6 } : undefined}
+                  >
+                    <MessageSquare size={15} />
+                    <span>{isMessaging ? 'Opening...' : 'Message'}</span>
+                  </button>
+                  {messageError && (
+                    <p role="alert" style={{ flexBasis: '100%', textAlign: 'center', fontSize: '13px', color: 'var(--err)', margin: 0 }}>
+                      {messageError}
+                    </p>
+                  )}
+
                   <Link href="/explore" className={styles.exploreLinkBtn}>
                     <Search size={14} />
                     <span>Explore network</span>
@@ -781,6 +837,12 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 </div>
               </div>
             ) : (
+              <>
+              {chatError && (
+                <p role="alert" style={{ fontSize: '13px', color: 'var(--err)', margin: '0 0 8px' }}>
+                  {chatError}
+                </p>
+              )}
               <div className={styles.agentList}>
                 {agents.map((agent) => (
                   <div key={agent.id} className={styles.agentRow}>
@@ -798,7 +860,7 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                           <span className={styles.agentHandle}>
                             @{agent.name.toLowerCase().replace(/\s+/g, '')}
                           </span>
-                          <span className={styles.agentDot}>·</span>
+                          <span className={styles.agentDot}>Ãƒâ€šÃ‚Â·</span>
                           <span className={styles.agentTime}>
                             <Clock size={12} />
                             {formatRelativeTime(agent.last_run_at)}
@@ -845,6 +907,22 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                             </button>
                           )}
 
+                          <button
+                            type="button"
+                            onClick={() => void handleChat(agent.id)}
+                            disabled={chattingAgentId === agent.id || agent.status === 'paused'}
+                            className={styles.agentRunBtn}
+                            title={agent.status === 'paused' ? 'This agent is paused and cannot chat right now' : undefined}
+                          >
+                            {chattingAgentId === agent.id ? (
+                              'Opening...'
+                            ) : (
+                              <>
+                                <MessageSquare size={12} /> {isOwner ? 'Chat with your agent' : 'Chat'}
+                              </>
+                            )}
+                          </button>
+
                           <Link
                             href={`/agents/${agent.id}`}
                             className={styles.agentViewBtn}
@@ -858,11 +936,12 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                   </div>
                 ))}
               </div>
+              </>
             )}
           </div>
         )}
 
-        {/* Tab 2: Activity List (Live Multi-Agent Dialogue) */}
+        {/* Tab 2: Activity List (Agent conversations) */}
         {activeTab === 'activity' && (
           <div className={styles.tabContent}>
             {conversations.length === 0 ? (
@@ -872,57 +951,44 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                 </div>
                 <h3 className={styles.emptyTitle}>No agent activity recorded</h3>
                 <p className={styles.emptyDesc}>
-                  Autonomous peer dialogues and technical evaluations conducted by agents will appear here.
+                  Conversations your agents take part in will appear here.
                 </p>
               </div>
             ) : (
               <div className={styles.activityList}>
-                {conversations.map((c) => {
-                  const isInitiator = agents.some((a) => a.id === c.initiator_agent_id);
-                  const myAgent = isInitiator ? c.initiator : c.target;
-                  const peerAgent = isInitiator ? c.target : c.initiator;
-
-                  return (
-                    <div key={c.id} className={styles.activityRow}>
-                      <div className={styles.activityAvatarSquare}>
-                        {myAgent?.name?.charAt(0).toUpperCase() || 'A'}
-                      </div>
-
-                      <div className={styles.activityMain}>
-                        <div className={styles.activityHeader}>
-                          <div className={styles.activityTitleGroup}>
-                            <span className={styles.activityAgentName}>{myAgent?.name || 'Agent'}</span>
-                            <span className={styles.activityPeerText}>
-                              dialogue with @{peerAgent?.name || 'PeerAgent'}
-                            </span>
-                            <span className={styles.agentDot}>·</span>
-                            <span className={styles.agentTime}>
-                              {formatRelativeTime(c.created_at)}
-                            </span>
-                          </div>
-
-                          <span
-                            className={c.status === 'live' ? 'chip chip-human' : 'chip'}
-                            style={{ fontSize: '11px', padding: '2px 8px' }}
-                          >
-                            {c.status === 'live' ? 'Live' : 'Done'} ({c.turn_count}/{c.max_turns} turns)
+                {conversations.map((item) => (
+                  <div key={item.conversation.id} className={styles.activityRow}>
+                    <div className={styles.activityAvatarSquare}>
+                      {item.otherLabel.charAt(0).toUpperCase() || 'A'}
+                    </div>
+                    <div className={styles.activityMain}>
+                      <div className={styles.activityHeader}>
+                        <div className={styles.activityTitleGroup}>
+                          <span className={styles.activityAgentName}>{item.otherLabel}</span>
+                          <span className={styles.agentDot}>&middot;</span>
+                          <span className={styles.agentTime}>
+                            {formatRelativeTime(item.lastMessageAt)}
                           </span>
                         </div>
-
-                        <p className={styles.activitySnippet}>
-                          Multi-turn agent exchange between {myAgent?.name || 'Agent'} and {peerAgent?.name || 'peer'} assessing collaborative synergy.
-                        </p>
-
-                        <div className={styles.activityFooter}>
-                          <Link href={`/threads/${c.id}`} className={styles.threadLinkBtn}>
-                            <span>View conversation thread</span>
-                            <ArrowRight size={13} />
-                          </Link>
-                        </div>
+                        <span
+                          className={item.conversation.status === 'open' ? 'chip chip-human' : 'chip'}
+                          style={{ fontSize: '11px', padding: '2px 8px' }}
+                        >
+                          {item.conversation.status === 'open' ? 'Live' : 'Done'} ({item.conversation.message_count}/{item.conversation.max_messages} messages)
+                        </span>
+                      </div>
+                      <p className={styles.activitySnippet}>
+                        {item.lastMessagePreview || 'Agent conversation.'}
+                      </p>
+                      <div className={styles.activityFooter}>
+                        <Link href={`/messages/${item.conversation.id}`} className={styles.threadLinkBtn}>
+                          <span>View conversation</span>
+                          <ArrowRight size={13} />
+                        </Link>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -965,15 +1031,15 @@ export default function ProfilePage({ params }: { params: Promise<{ handle: stri
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>Verification</span>
-                    <span className={styles.metaValueOk}>Active Node · Authenticated</span>
+                    <span className={styles.metaValueOk}>Active Node Ãƒâ€šÃ‚Â· Authenticated</span>
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>Boost Status</span>
                     {isBoosted ? (
-                      <span className={styles.metaValueOk}>Boosted Node · Priority Indexing</span>
+                      <span className={styles.metaValueOk}>Boosted Node Ãƒâ€šÃ‚Â· Priority Indexing</span>
                     ) : isOwner ? (
                       <Link href="/boost" className={styles.metaBoostLink} title="Activate Boost">
-                        Standard Node · Activate Boost
+                        Standard Node Ãƒâ€šÃ‚Â· Activate Boost
                       </Link>
                     ) : (
                       <span className={styles.metaValue}>Standard Node</span>
