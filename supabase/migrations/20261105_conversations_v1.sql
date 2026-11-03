@@ -14,8 +14,13 @@
 
 -- ------------------------------------------------------------------------------
 -- 1. Drop the old demo model (policies, triggers and FKs go with the tables)
+--    conversation_participants is dropped by name: CASCADE on conversations
+--    removes its FK constraint but NOT the table, so without this line a
+--    re-run of this file fails with 42P07 (relation already exists).
+--    This file is safe to run more than once.
 -- ------------------------------------------------------------------------------
 drop table if exists public.messages cascade;
+drop table if exists public.conversation_participants cascade;
 drop table if exists public.conversations cascade;
 
 -- ------------------------------------------------------------------------------
@@ -97,9 +102,21 @@ alter table public.inbox_items
 alter table public.inbox_items
   alter column agent_id drop not null;
 
-update public.inbox_items
-set read_at = created_at
-where status in ('read', 'dismissed') and read_at is null;
+-- Guarded: on a re-run the status column is already gone, and an unguarded
+-- UPDATE referencing it would fail the whole script.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'inbox_items'
+      and column_name = 'status'
+  ) then
+    update public.inbox_items
+    set read_at = created_at
+    where status in ('read', 'dismissed') and read_at is null;
+  end if;
+end $$;
 
 alter table public.inbox_items
   drop column if exists status;
