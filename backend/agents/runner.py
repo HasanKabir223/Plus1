@@ -19,6 +19,7 @@ from backend.agents.decision import (
     DecisionRejected,
     InvalidModelOutput,
     ValidatedDecision,
+    extract_like_ids,
     parse_decision,
     validate_decision,
 )
@@ -49,6 +50,9 @@ class RunResult:
     post_id: str | None = None
     text: str | None = None
     retry_after_seconds: int | None = None
+    likes_applied: int = 0
+    parent_post_id: str | None = None
+    likes_would_apply: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"status": self.status, "reason": self.reason}
@@ -58,6 +62,12 @@ class RunResult:
             body["text"] = self.text
         if self.retry_after_seconds is not None:
             body["retry_after_seconds"] = self.retry_after_seconds
+        if self.likes_applied:
+            body["likes_applied"] = self.likes_applied
+        if self.parent_post_id is not None:
+            body["parent_post_id"] = self.parent_post_id
+        if self.likes_would_apply:
+            body["likes_would_apply"] = self.likes_would_apply
         return body
 
 
@@ -84,20 +94,28 @@ def _write_log(
     tokens_in: int = 0,
     tokens_out: int = 0,
     latency_ms: int = 0,
+    like_ids: list[str] | None = None,
+    parent_post_id: str | None = None,
 ) -> None:
     """Best-effort action_log insert. Logging must never break a run."""
     try:
+        output: dict[str, Any] = {
+            "reason": reason,
+            "post_id": post_id,
+            "text": text,
+        }
+        if like_ids:
+            output["like_post_ids"] = list(like_ids)
+            output["likes_applied"] = len(like_ids)
+        if parent_post_id is not None:
+            output["parent_post_id"] = parent_post_id
         db.table("action_log").insert(
             {
                 "agent_id": agent_id,
                 "trigger": trigger,
                 "action": action,
                 "input_summary": input_summary or {},
-                "output": {
-                    "reason": reason,
-                    "post_id": post_id,
-                    "text": text,
-                },
+                "output": output,
                 "status": status,
                 "error": (error[:500] if error else None),
                 "model": model,
@@ -131,6 +149,38 @@ def _add_tokens(db: Any, tokens: int) -> None:
         db.rpc("add_llm_tokens", {"p_tokens": tokens}).execute()
     except Exception as exc:  # noqa: BLE001 - accounting is best-effort
         logger.warning("add_llm_tokens failed: %r", exc)
+
+
+def _apply_likes(db: Any, agent_id: str, like_ids: list[str]) -> list[str]:
+    """Insert agent likes (service role). Idempotent: duplicates are skipped.
+
+    Uses ON CONFLICT DO NOTHING semantics (ignore_duplicates), so a second
+    like of the same post is a no-op rather than an error. Returns the ids
+    that were actually inserted.
+    """
+    applied: list[str] = []
+    for post_id in like_ids:
+        try:
+            res = (
+                db.table("post_likes")
+                .insert(
+                    {
+                        "post_id": post_id,
+                        "liker_agent_id": agent_id,
+                        "liker_profile_id": None,
+                    },
+                    ignore_duplicates=True,
+                )
+                .execute()
+            )
+        except Exception as exc:  # noqa: BLE001 - one bad like must not fail the run
+            logger.warning(
+                "like insert failed agent=%s post=%s: %r", agent_id, post_id, exc
+            )
+            continue
+        if res.data:
+            applied.append(post_id)
+    return applied
 
 
 async def run_agent_once(
@@ -274,12 +324,20 @@ async def run_agent_once(
                 )
                 return RunResult(status="error", reason="invalid_model_output")
 
-        # 5. Validate in code; the model is never trusted.
+        # 5. Validate in code; the model is never trusted. Likes are
+        # extracted first (never raises) so they survive a rejected comment.
+        like_ids = extract_like_ids(
+            parsed,
+            eligible_like_ids=ctx.eligible_like_ids,
+            likes_today=ctx.likes_today,
+        )
         try:
             decision: ValidatedDecision = validate_decision(
                 parsed,
                 eligible_ids=ctx.eligible_ids,
                 skill_md=ctx.agent_skill,
+                eligible_like_ids=ctx.eligible_like_ids,
+                likes_today=ctx.likes_today,
             )
         except InvalidModelOutput as exc:
             _write_log(
@@ -291,22 +349,35 @@ async def run_agent_once(
             )
             return RunResult(status="error", reason="invalid_model_output")
         except DecisionRejected as exc:
+            applied = [] if dry_run else _apply_likes(db, agent_id, like_ids)
             _write_log(
                 db, agent_id=agent_id, trigger=trigger, action="none",
                 status="none", reason=exc.reason, input_summary=summary,
                 model=model, tokens_in=tokens_in, tokens_out=tokens_out,
-                latency_ms=latency_ms,
+                latency_ms=latency_ms, like_ids=applied or None,
             )
-            return RunResult(status="none", reason=exc.reason)
+            return RunResult(
+                status="none", reason=exc.reason,
+                likes_applied=len(applied),
+                likes_would_apply=(len(like_ids) if dry_run else 0),
+            )
+
+        like_ids = decision.like_post_ids
+        applied_like_ids = [] if dry_run else _apply_likes(db, agent_id, like_ids)
+        likes_applied = len(applied_like_ids)
 
         if decision.action == "none":
             _write_log(
                 db, agent_id=agent_id, trigger=trigger, action="none",
                 status="none", reason=decision.reason, input_summary=summary,
                 model=model, tokens_in=tokens_in, tokens_out=tokens_out,
-                latency_ms=latency_ms,
+                latency_ms=latency_ms, like_ids=applied_like_ids or None,
             )
-            return RunResult(status="none", reason=decision.reason)
+            return RunResult(
+                status="none", reason=decision.reason,
+                likes_applied=likes_applied,
+                likes_would_apply=(len(like_ids) if dry_run else 0),
+            )
 
         # 6. Reply safety re-checks against live DB state (the feed snapshot
         # may be stale by seconds): target exists, is top-level, is not the
@@ -346,8 +417,12 @@ async def run_agent_once(
                     input_summary=summary, model=model,
                     tokens_in=tokens_in, tokens_out=tokens_out,
                     latency_ms=latency_ms,
+                    like_ids=applied_like_ids or None,
                 )
-                return RunResult(status="none", reason="rejected_by_filter")
+                return RunResult(
+                    status="none", reason="rejected_by_filter",
+                    likes_applied=likes_applied,
+                )
 
         if dry_run:
             _write_log(
@@ -361,6 +436,7 @@ async def run_agent_once(
             return RunResult(
                 status="none", reason=f"dry_run:{decision.action}",
                 text=decision.text,
+                likes_would_apply=len(like_ids),
             )
 
         # 7. Write the post as the agent (service role bypasses RLS).
@@ -387,6 +463,8 @@ async def run_agent_once(
             post_id=post_id, text=decision.text,
             model=model, tokens_in=tokens_in,
             tokens_out=tokens_out, latency_ms=latency_ms,
+            like_ids=applied_like_ids or None,
+            parent_post_id=decision.reply_to_post_id,
         )
         logger.info(
             "run ok agent=%s action=%s post_id=%s", agent_id, status, post_id
@@ -394,6 +472,8 @@ async def run_agent_once(
         return RunResult(
             status=status, reason=decision.reason,
             post_id=post_id, text=decision.text,
+            likes_applied=likes_applied,
+            parent_post_id=decision.reply_to_post_id,
         )
     except Exception:
         # Real bug: log a best-effort row, then re-raise so the endpoint

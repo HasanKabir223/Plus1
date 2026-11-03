@@ -6,6 +6,7 @@ truncated) and later wrapped in <untrusted_data> blocks by prompt.py.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend import config
@@ -46,6 +47,22 @@ FEED_BODY_MAX_CHARS = 300
 # Owner field budgets.
 OWNER_FIELD_MAX_CHARS = 500
 
+def _parse_ts(value: Any) -> datetime | None:
+    """Parse an ISO-8601 timestamp (Supabase format) to an aware datetime."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 _WRAPPER_CLOSE = "</untrusted_data>"
 
 
@@ -76,6 +93,10 @@ class FeedPost:
     author_kind: str  # "human" | "agent"
     body: str
     created_at: str | None = None
+    author_profile_id: str | None = None
+    author_agent_id: str | None = None
+    like_count: int = 0
+    reply_count: int = 0
 
 
 @dataclass
@@ -84,6 +105,7 @@ class AgentContext:
     agent_name: str
     agent_personality: str
     agent_skill: str
+    owner_id: str
     owner_name: str
     owner_username: str
     owner_bio: str
@@ -91,10 +113,16 @@ class AgentContext:
     recent_feed: list[FeedPost] = field(default_factory=list)
     own_recent_posts: list[str] = field(default_factory=list)
     eligible_targets: list[FeedPost] = field(default_factory=list)
+    eligible_like_targets: list[FeedPost] = field(default_factory=list)
+    likes_today: int = 0
 
     @property
     def eligible_ids(self) -> set[str]:
         return {p.id for p in self.eligible_targets}
+
+    @property
+    def eligible_like_ids(self) -> set[str]:
+        return {p.id for p in self.eligible_like_targets}
 
     def input_summary(self) -> dict[str, Any]:
         """Compact summary for action_log: ids and counts, never full text."""
@@ -102,6 +130,8 @@ class AgentContext:
             "feed_post_ids": [p.id for p in self.recent_feed],
             "feed_count": len(self.recent_feed),
             "eligible_target_ids": sorted(self.eligible_ids),
+            "eligible_like_target_ids": sorted(self.eligible_like_ids),
+            "likes_today": self.likes_today,
             "own_recent_count": len(self.own_recent_posts),
             "skill_chars": len(self.agent_skill),
         }
@@ -131,7 +161,7 @@ def _author_label(post: dict[str, Any]) -> tuple[str, str]:
 
 
 _POST_EMBED = (
-    "id,body,created_at,author_profile_id,author_agent_id,parent_id,"
+    "id,body,created_at,author_profile_id,author_agent_id,parent_id,like_count,reply_count,"
     "author_profile:profiles!author_profile_id(username,profilename),"
     "author_agent:agents!author_agent_id(name,owner:profiles!owner_id(username))"
 )
@@ -184,6 +214,14 @@ def load_context(client: Any, agent_id: str) -> AgentContext:
                 author_kind=kind,
                 body=sanitize(row.get("body"), FEED_BODY_MAX_CHARS),
                 created_at=row.get("created_at"),
+                author_profile_id=(
+                    str(row["author_profile_id"]) if row.get("author_profile_id") else None
+                ),
+                author_agent_id=(
+                    str(row["author_agent_id"]) if row.get("author_agent_id") else None
+                ),
+                like_count=int(row.get("like_count") or 0),
+                reply_count=int(row.get("reply_count") or 0),
             )
         )
         if len(recent_feed) >= FEED_POST_LIMIT:
@@ -207,13 +245,66 @@ def load_context(client: Any, agent_id: str) -> AgentContext:
         str(r.get("parent_id")) for r in own_rows if r.get("parent_id")
     }
 
-    # Eligible reply targets: top-level, not ours, never replied to.
+    # Posts this agent has already liked (any of today's feed posts).
+    feed_ids = [p.id for p in recent_feed]
+    liked_ids: set[str] = set()
+    likes_today = 0
+    if feed_ids:
+        try:
+            likes_res = (
+                client.table("post_likes")
+                .select("id,post_id,created_at")
+                .eq("liker_agent_id", agent_id)
+                .execute()
+            )
+        except Exception:
+            # post_likes not migrated yet: no likes, no eligible like targets.
+            likes_res = None
+        if likes_res is not None:
+            today_start = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            for like_row in likes_res.data or []:
+                liked_ids.add(str(like_row.get("post_id")))
+                like_ts = _parse_ts(like_row.get("created_at"))
+                if like_ts is not None and like_ts >= today_start:
+                    likes_today += 1
+
+    def _fresh(post: FeedPost) -> bool:
+        ts = _parse_ts(post.created_at)
+        if ts is None:
+            return False
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            days=config.COMMENT_TARGET_MAX_AGE_DAYS
+        )
+        return ts >= cutoff
+
+    owner_id = str(agent.get("owner_id") or "")
+
+    # Eligible reply targets: top-level, not ours, never replied to, fresh.
     # (Target depth is 0 for top-level posts; the reply would sit at depth 1,
     # which must fit REPLY_MAX_DEPTH.)
     depth_ok = config.REPLY_MAX_DEPTH >= 1
     eligible: list[FeedPost] = (
-        [p for p in recent_feed if p.id not in already_replied_to] if depth_ok else []
+        [
+            p
+            for p in recent_feed
+            if p.id not in already_replied_to and _fresh(p)
+        ]
+        if depth_ok
+        else []
     )
+
+    # Eligible like targets: top-level posts by others (not this agent, not
+    # this agent's owner), not already liked by this agent, fresh.
+    eligible_like: list[FeedPost] = [
+        p
+        for p in recent_feed
+        if p.author_agent_id != agent_id
+        and (owner_id == "" or p.author_profile_id != owner_id)
+        and p.id not in liked_ids
+        and _fresh(p)
+    ]
 
     looking_for = owner.get("looking_for") or []
     if not isinstance(looking_for, list):
@@ -228,6 +319,7 @@ def load_context(client: Any, agent_id: str) -> AgentContext:
         agent_skill=sanitize(
             agent.get("skill_md"), config.AGENT_SKILL_MAX_CHARS
         ) or DEFAULT_SKILL_MD,
+        owner_id=owner_id,
         owner_name=sanitize(
             owner.get("profilename") or owner.get("username") or "Member",
             OWNER_FIELD_MAX_CHARS,
@@ -240,4 +332,6 @@ def load_context(client: Any, agent_id: str) -> AgentContext:
         recent_feed=recent_feed,
         own_recent_posts=own_recent,
         eligible_targets=eligible,
+        eligible_like_targets=eligible_like,
+        likes_today=likes_today,
     )

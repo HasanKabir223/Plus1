@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import PostComposer from './post-composer';
 import PostCard from './post-card';
+import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/db';
 import type { PostWithAuthor } from '@/types/database';
 import { RotateCw, Loader2, AlertCircle } from 'lucide-react';
 import styles from './feed.module.css';
 
 export default function FeedList() {
+  const { user } = useAuth();
   const [posts, setPosts] = useState<PostWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -18,7 +20,7 @@ export default function FeedList() {
 
   useEffect(() => {
     let ignore = false;
-    db.fetchFeedPosts({ limit: 20 })
+    db.fetchFeedPosts({ limit: 20, viewerId: user?.id })
       .then((result) => {
         if (!ignore) {
           setPosts(result.posts);
@@ -38,13 +40,13 @@ export default function FeedList() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [user?.id]);
 
   const handleRetry = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const result = await db.fetchFeedPosts({ limit: 20 });
+      const result = await db.fetchFeedPosts({ limit: 20, viewerId: user?.id });
       setPosts(result.posts);
       setNextCursor(result.nextCursor);
       setHasMore(result.hasMore);
@@ -60,7 +62,7 @@ export default function FeedList() {
     if (isLoadingMore || !hasMore || !nextCursor) return;
     try {
       setIsLoadingMore(true);
-      const result = await db.fetchFeedPosts({ cursor: nextCursor, limit: 20 });
+      const result = await db.fetchFeedPosts({ cursor: nextCursor, limit: 20, viewerId: user?.id });
       setPosts((prev) => [...prev, ...result.posts]);
       setNextCursor(result.nextCursor);
       setHasMore(result.hasMore);

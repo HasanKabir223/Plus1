@@ -11,7 +11,7 @@ Pipeline: raw text -> parse_decision() -> validate_decision().
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from backend import config
 
@@ -56,6 +56,45 @@ class ValidatedDecision:
     text: str | None
     reply_to_post_id: str | None
     reason: str
+    like_post_ids: list[str] = field(default_factory=list)
+
+
+def extract_like_ids(
+    parsed: dict,
+    *,
+    eligible_like_ids: set[str],
+    likes_today: int = 0,
+    per_run_cap: int | None = None,
+    daily_cap: int | None = None,
+) -> list[str]:
+    """Filter the model's like_post_ids down to what code allows.
+
+    Never raises: a malformed value simply yields no likes. Order: keep
+    first-seen eligible ids, drop duplicates, truncate to the per-run cap,
+    then trim to the remaining daily-cap headroom.
+    """
+    if per_run_cap is None:
+        per_run_cap = config.AGENT_LIKES_PER_RUN
+    if daily_cap is None:
+        daily_cap = config.AGENT_LIKE_DAILY_CAP
+
+    raw = parsed.get("like_post_ids")
+    if not isinstance(raw, list):
+        return []
+
+    seen: set[str] = set()
+    kept: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        if item in seen or item not in eligible_like_ids:
+            continue
+        seen.add(item)
+        kept.append(item)
+
+    kept = kept[: max(0, int(per_run_cap))]
+    headroom = max(0, int(daily_cap) - max(0, int(likes_today)))
+    return kept[:headroom]
 
 
 def skill_allows_links(skill_md: str | None) -> bool:
@@ -150,12 +189,23 @@ def validate_decision(
     skill_md: str | None = None,
     replies_enabled: bool | None = None,
     max_chars: int | None = None,
+    eligible_like_ids: set[str] | None = None,
+    likes_today: int = 0,
+    comment_max_chars: int | None = None,
 ) -> ValidatedDecision:
     """Validate a parsed decision dict. Raises DecisionRejected/InvalidModelOutput."""
     if replies_enabled is None:
         replies_enabled = config.AGENT_REPLIES_ENABLED
     if max_chars is None:
         max_chars = config.AGENT_POST_MAX_CHARS
+    if comment_max_chars is None:
+        comment_max_chars = config.AGENT_COMMENT_MAX_CHARS
+
+    like_ids = extract_like_ids(
+        parsed,
+        eligible_like_ids=eligible_like_ids or set(),
+        likes_today=likes_today,
+    )
 
     action = parsed.get("action")
     if action not in ("post", "reply", "none"):
@@ -166,7 +216,10 @@ def validate_decision(
     reason = reason[:REASON_MAX_CHARS] if reason else ("no reason given" if action == "none" else "decided")
 
     if action == "none":
-        return ValidatedDecision(action="none", text=None, reply_to_post_id=None, reason=reason)
+        return ValidatedDecision(
+            action="none", text=None, reply_to_post_id=None, reason=reason,
+            like_post_ids=like_ids,
+        )
 
     raw_text = parsed.get("text")
     if not isinstance(raw_text, str) or not raw_text.strip():
@@ -185,10 +238,13 @@ def validate_decision(
     if _URL_RE.search(text) and not skill_allows_links(skill_md):
         raise DecisionRejected("rejected_by_filter")
 
-    text = _fit_length(text, max_chars)
+    text = _fit_length(text, comment_max_chars if action == "reply" else max_chars)
 
     if action == "post":
-        return ValidatedDecision(action="post", text=text, reply_to_post_id=None, reason=reason)
+        return ValidatedDecision(
+            action="post", text=text, reply_to_post_id=None, reason=reason,
+            like_post_ids=like_ids,
+        )
 
     # action == "reply"
     if not replies_enabled:
@@ -196,4 +252,7 @@ def validate_decision(
     reply_to = parsed.get("reply_to_post_id")
     if not isinstance(reply_to, str) or reply_to not in eligible_ids:
         raise DecisionRejected("rejected_by_filter")
-    return ValidatedDecision(action="reply", text=text, reply_to_post_id=reply_to, reason=reason)
+    return ValidatedDecision(
+        action="reply", text=text, reply_to_post_id=reply_to, reason=reason,
+        like_post_ids=like_ids,
+    )

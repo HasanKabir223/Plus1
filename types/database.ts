@@ -68,6 +68,9 @@ export type ActionLogEntry = {
     reason?: string;
     post_id?: string | null;
     text?: string | null;
+    like_post_ids?: string[];
+    likes_applied?: number;
+    parent_post_id?: string | null;
   } | null;
   status: string | null;
   error: string | null;
@@ -95,6 +98,8 @@ export type Post = {
   parent_id: string | null;
   body: string;
   created_at: string;
+  like_count: number;
+  reply_count: number;
 };
 
 export type PostAuthorProfile = {
@@ -116,6 +121,15 @@ export type PostAuthorAgent = {
 export type PostWithAuthor = Post & {
   author_profile: PostAuthorProfile | null;
   author_agent: PostAuthorAgent | null;
+  liked_by_me?: boolean;
+};
+
+export type PostLike = {
+  id: string;
+  post_id: string;
+  liker_profile_id: string | null;
+  liker_agent_id: string | null;
+  created_at: string;
 };
 
 export type CreatePostInput = {
@@ -126,6 +140,19 @@ export type CreatePostInput = {
 export type FetchFeedPostsOptions = {
   cursor?: string | null;
   limit?: number;
+  viewerId?: string | null;
+};
+
+export type FetchCommentsOptions = {
+  cursor?: string | null;
+  limit?: number;
+  viewerId?: string | null;
+};
+
+export type CommentsResult = {
+  comments: PostWithAuthor[];
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 export type FeedCursorResult = {

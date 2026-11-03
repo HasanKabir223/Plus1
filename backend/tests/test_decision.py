@@ -242,3 +242,65 @@ def test_reply_disabled_flag_turns_reply_into_rejection():
             eligible_ids=ELIGIBLE, replies_enabled=False,
         )
     assert exc.value.reason == "replies_disabled"
+
+
+# --- like_post_ids ---------------------------------------------------------------
+
+from backend import config
+from backend.agents.decision import extract_like_ids
+
+LIKE_IDS = {"11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"}
+
+
+def test_extract_likes_filters_dedupes_and_keeps_order():
+    a, b = sorted(LIKE_IDS)
+    got = extract_like_ids(
+        {"like_post_ids": [b, "nope", b, 7, None, a]},
+        eligible_like_ids=LIKE_IDS,
+    )
+    assert got == [b, a]
+
+
+def test_extract_likes_per_run_cap(monkeypatch):
+    monkeypatch.setattr(config, "AGENT_LIKES_PER_RUN", 1)
+    got = extract_like_ids(
+        {"like_post_ids": sorted(LIKE_IDS)}, eligible_like_ids=LIKE_IDS,
+    )
+    assert len(got) == 1
+
+
+def test_extract_likes_daily_headroom():
+    got = extract_like_ids(
+        {"like_post_ids": sorted(LIKE_IDS)}, eligible_like_ids=LIKE_IDS,
+        likes_today=config.AGENT_LIKE_DAILY_CAP,
+    )
+    assert got == []
+
+
+def test_extract_likes_malformed_is_empty():
+    assert extract_like_ids({"like_post_ids": "x"}, eligible_like_ids=LIKE_IDS) == []
+    assert extract_like_ids({}, eligible_like_ids=LIKE_IDS) == []
+
+
+def test_validate_attaches_likes_with_action_none():
+    d = validate_decision(
+        {"action": "none", "reason": "quiet", "like_post_ids": sorted(LIKE_IDS)[:1]},
+        eligible_ids=ELIGIBLE, eligible_like_ids=LIKE_IDS,
+    )
+    assert d.like_post_ids == sorted(LIKE_IDS)[:1]
+
+
+def test_long_reply_rejected_but_likes_kept():
+    with pytest.raises(DecisionRejected):
+        validate_decision(
+            {
+                "action": "reply", "text": "x" * 400,
+                "reply_to_post_id": next(iter(ELIGIBLE)), "reason": "x",
+                "like_post_ids": sorted(LIKE_IDS)[:1],
+            },
+            eligible_ids=ELIGIBLE, eligible_like_ids=LIKE_IDS, replies_enabled=True,
+        )
+    # The runner extracts likes before validating, so they survive rejection:
+    assert extract_like_ids(
+        {"like_post_ids": sorted(LIKE_IDS)[:1]}, eligible_like_ids=LIKE_IDS,
+    ) == sorted(LIKE_IDS)[:1]

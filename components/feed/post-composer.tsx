@@ -10,6 +10,7 @@ import styles from './feed.module.css';
 
 interface PostComposerProps {
   onPostCreated?: (post: PostWithAuthor) => void;
+  parentId?: string;
 }
 
 function getAvatarLetters(name: string): string {
@@ -22,7 +23,8 @@ function getAvatarLetters(name: string): string {
   return clean.slice(0, 2).toUpperCase();
 }
 
-export default function PostComposer({ onPostCreated }: PostComposerProps) {
+export default function PostComposer({ onPostCreated, parentId }: PostComposerProps) {
+  const isComment = Boolean(parentId);
   const { user, profile, isLoading } = useAuth();
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,10 +92,12 @@ export default function PostComposer({ onPostCreated }: PostComposerProps) {
       setError(null);
 
       // Security invariant: author_profile_id is always derived from session user.id, never props or URL
-      const newPost = await db.createPost({
-        body: trimmedText,
-        author_profile_id: user.id,
-      });
+      const newPost = isComment
+        ? await db.createComment(parentId as string, trimmedText, user.id)
+        : await db.createPost({
+            body: trimmedText,
+            author_profile_id: user.id,
+          });
 
       // Clear textarea and reset height on success
       setText('');
@@ -103,7 +107,10 @@ export default function PostComposer({ onPostCreated }: PostComposerProps) {
 
       onPostCreated?.(newPost);
     } catch (err: unknown) {
-      console.error('[PostComposer] Failed to create post:', { userId: user.id, error: err });
+      console.error(
+        isComment ? '[PostComposer] Failed to create comment:' : '[PostComposer] Failed to create post:',
+        { userId: user.id, error: err }
+      );
       setError(err instanceof Error ? err.message : 'Unable to share post. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -121,7 +128,7 @@ export default function PostComposer({ onPostCreated }: PostComposerProps) {
   const avatarInitials = getAvatarLetters(displayName);
 
   return (
-    <div className={styles.composerCard} role="region" aria-label="Create a post">
+    <div className={styles.composerCard} role="region" aria-label={isComment ? 'Write a comment' : 'Create a post'}>
       <div className={styles.composerMain}>
         <div className={styles.composerAvatar} title={displayName} aria-hidden="true">
           {avatarInitials}
@@ -132,10 +139,10 @@ export default function PostComposer({ onPostCreated }: PostComposerProps) {
             value={text}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="What are you or your agents working on?"
+            placeholder={isComment ? 'Write a comment' : 'What are you or your agents working on?'}
             className={styles.composerTextarea}
             disabled={isSubmitting}
-            aria-label="Post body (up to 500 characters)"
+            aria-label={isComment ? 'Comment body (up to 500 characters)' : 'Post body (up to 500 characters)'}
             rows={2}
           />
         </div>
@@ -166,7 +173,7 @@ export default function PostComposer({ onPostCreated }: PostComposerProps) {
           onClick={handleSubmit}
           disabled={!canSubmit}
           className={styles.submitBtn}
-          aria-label="Publish post"
+          aria-label={isComment ? 'Publish comment' : 'Publish post'}
         >
           {isSubmitting ? (
             <>
@@ -174,7 +181,7 @@ export default function PostComposer({ onPostCreated }: PostComposerProps) {
               <span>Posting...</span>
             </>
           ) : (
-            <span>Post</span>
+            <span>{isComment ? 'Comment' : 'Post'}</span>
           )}
         </button>
       </div>

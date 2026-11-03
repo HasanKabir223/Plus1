@@ -22,8 +22,15 @@ const AGENT_API_URL = process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://127.0.0.1
 
 // Every outcome of one Run click, rendered inline below the button.
 type RunOutcome =
-  | { kind: 'posted' | 'replied'; text: string; postId: string | null; reason: string }
-  | { kind: 'none'; reason: string }
+  | {
+      kind: 'posted' | 'replied';
+      text: string;
+      postId: string | null;
+      reason: string;
+      likesApplied: number;
+      parentPostId: string | null;
+    }
+  | { kind: 'none'; reason: string; likesApplied: number }
   | { kind: 'cooldown'; reason: string; retryAfter: number }
   | { kind: 'paused' }
   | { kind: 'busy' }
@@ -254,11 +261,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           text: String(body.text || ''),
           postId: body.post_id ? String(body.post_id) : null,
           reason: String(body.reason || ''),
+          likesApplied: Number(body.likes_applied) || 0,
+          parentPostId: body.parent_post_id ? String(body.parent_post_id) : null,
         });
         await fetchAgentData();
         await fetchRunHistory();
       } else if (body.status === 'none') {
-        setRunOutcome({ kind: 'none', reason: String(body.reason || '') });
+        setRunOutcome({
+          kind: 'none',
+          reason: String(body.reason || ''),
+          likesApplied: Number(body.likes_applied) || 0,
+        });
         await fetchRunHistory();
       } else if (body.status === 'skipped') {
         setRunOutcome({ kind: 'paused' });
@@ -432,10 +445,18 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
                     <CheckCircle size={16} color="var(--ink)" />
-                    <span>{runOutcome.kind === 'posted' ? 'Posted.' : 'Replied.'}</span>
+                    <span>
+                      {runOutcome.kind === 'posted'
+                        ? runOutcome.likesApplied > 0
+                          ? `Posted and liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
+                          : 'Posted.'
+                        : runOutcome.likesApplied > 0
+                          ? `Commented and liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
+                          : 'Commented.'}
+                    </span>
                   </div>
                   <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runOutcome.text}</p>
-                  <div style={{ marginTop: '8px' }}>
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <Link
                       href="/home?tab=feed"
                       style={{
@@ -450,12 +471,32 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                       <span>See it in the Feed</span>
                       <ExternalLink size={12} />
                     </Link>
+                    {runOutcome.kind === 'replied' && runOutcome.parentPostId && (
+                      <Link
+                        href={`/posts/${runOutcome.parentPostId}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: 'var(--human)',
+                          fontWeight: 600,
+                          fontSize: '13px',
+                        }}
+                      >
+                        <span>View the comment</span>
+                        <ExternalLink size={12} />
+                      </Link>
+                    )}
                   </div>
                 </>
               )}
               {runOutcome.kind === 'none' && (
                 <>
-                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>Chose not to post.</div>
+                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                    {runOutcome.likesApplied > 0
+                      ? `Liked ${runOutcome.likesApplied} post${runOutcome.likesApplied === 1 ? '' : 's'}.`
+                      : 'Chose not to post.'}
+                  </div>
                   <p style={{ color: 'var(--ink-soft)', fontSize: '13px', lineHeight: 1.45 }}>
                     {runOutcome.reason}
                   </p>
@@ -688,7 +729,27 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                       {entry.status || 'unknown'}
                       {entry.output?.reason ? ` — ${entry.output.reason}` : ''}
                       {entry.error ? ` (${entry.error})` : ''}
+                      {(() => {
+                        const likeCount =
+                          entry.output?.likes_applied ??
+                          entry.output?.like_post_ids?.length ??
+                          0;
+                        return likeCount > 0
+                          ? ` · Liked ${likeCount} post${likeCount === 1 ? '' : 's'}`
+                          : '';
+                      })()}
+                      {entry.status === 'replied' && entry.output?.parent_post_id
+                        ? ' · Commented'
+                        : ''}
                     </span>
+                    {entry.status === 'replied' && entry.output?.parent_post_id && (
+                      <Link
+                        href={`/posts/${entry.output.parent_post_id}`}
+                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--human)' }}
+                      >
+                        View comment
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>

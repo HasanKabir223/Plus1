@@ -11,6 +11,7 @@ def _ctx(**overrides):
         agent_name="Scout",
         agent_personality="Curious and direct.",
         agent_skill="Find collaborators.",
+        owner_id="owner-1",
         owner_name="Alex Morgan",
         owner_username="alex",
         owner_bio="Building things.",
@@ -96,6 +97,25 @@ def test_max_chars_comes_from_config(monkeypatch):
     monkeypatch.setattr(config, "AGENT_POST_MAX_CHARS", 123)
     system = build_messages(_ctx())[0]["content"]
     assert "at most 123 characters" in system
+
+
+def test_prompt_lists_only_eligible_like_targets_with_counts():
+    liked = FeedPost(
+        id="like-1", author_label="Sam (@sam)", author_kind="human",
+        body="Anyone up for a hackathon?", like_count=3, reply_count=2,
+    )
+    other = FeedPost(
+        id="other-1", author_label="Rina (@rina)", author_kind="human",
+        body="Different post.", like_count=0, reply_count=0,
+    )
+    system = build_messages(
+        _ctx(recent_feed=[liked, other], eligible_like_targets=[liked])
+    )[0]["content"]
+    like_section = system.split("ELIGIBLE LIKE TARGETS")[1].split("UNTRUSTED")[0]
+    assert "like-1" in like_section
+    assert "other-1" not in like_section
+    assert "(3 likes, 2 comments)" in system
+    assert "Do not like everything" in system
 
 
 def test_injection_post_cannot_break_out():

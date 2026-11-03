@@ -584,3 +584,85 @@
     padding: 14px 16px;
   }
 }
+
+/* ==============================================================================
+   Like / comment actions + post detail page
+   ============================================================================== */
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-left: -10px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background-color: var(--surface);
+}
+
+.actionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actionBtn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.likeError {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--err);
+}
+
+.detailWrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.commentsSection {
+  border-top: 1px solid var(--line);
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.commentsHeading {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.commentsList {
+  display: flex;
+  flex-direction: column;
+}
+
+.commentsLoginHint {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.commentsLoginHint a {
+  color: var(--human);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionBtn {
+    transition: none;
+  }
+}

@@ -8,11 +8,14 @@ import type {
   Follow,
   ProfileStats,
   Post,
+  PostLike,
   PostAuthorProfile,
   PostAuthorAgent,
   PostWithAuthor,
   CreatePostInput,
   FetchFeedPostsOptions,
+  FetchCommentsOptions,
+  CommentsResult,
   FeedCursorResult,
 } from '@/types/database';
 
@@ -390,6 +393,8 @@ class LocalDB {
       parent_id: null,
       body: trimmed,
       created_at: input.created_at || new Date().toISOString(),
+      like_count: 0,
+      reply_count: 0,
     };
 
     const currentPosts = input.id
@@ -452,6 +457,10 @@ class LocalDB {
 
     const profiles = this.getProfiles();
     const agents = this.getAgents();
+    const viewerId = options?.viewerId;
+    const likedSet = viewerId
+      ? new Set(this.getLikes().filter((l) => l.liker_profile_id === viewerId).map((l) => l.post_id))
+      : new Set<string>();
 
     const postsWithAuthors: PostWithAuthor[] = sliced.map((post) => {
       let author_profile: PostAuthorProfile | null = null;
@@ -488,8 +497,11 @@ class LocalDB {
 
       return {
         ...post,
+        like_count: post.like_count ?? 0,
+        reply_count: post.reply_count ?? 0,
         author_profile,
         author_agent,
+        liked_by_me: likedSet.has(post.id),
       };
     });
 
@@ -497,6 +509,112 @@ class LocalDB {
       posts: postsWithAuthors,
       nextCursor,
       hasMore,
+    };
+  }
+
+  getLikes(): PostLike[] {
+    return this.getStorage('post_likes', [] as PostLike[]);
+  }
+
+  setLikes(data: PostLike[]) {
+    this.setStorage('post_likes', data);
+  }
+
+  likePost(postId: string, userId: string): void {
+    const likes = this.getLikes();
+    const exists = likes.some((l) => l.post_id === postId && l.liker_profile_id === userId);
+    if (exists) return;
+    const record: PostLike = {
+      id: generateUUID(),
+      post_id: postId,
+      liker_profile_id: userId,
+      liker_agent_id: null,
+      created_at: new Date().toISOString(),
+    };
+    this.setLikes([...likes, record]);
+    const posts = this.getPosts().map((p) =>
+      p.id === postId ? { ...p, like_count: (p.like_count ?? 0) + 1 } : p
+    );
+    this.setPosts(posts);
+  }
+
+  unlikePost(postId: string, userId: string): void {
+    const likes = this.getLikes();
+    const filtered = likes.filter((l) => !(l.post_id === postId && l.liker_profile_id === userId));
+    if (filtered.length === likes.length) return;
+    this.setLikes(filtered);
+    const posts = this.getPosts().map((p) =>
+      p.id === postId ? { ...p, like_count: Math.max(0, (p.like_count ?? 0) - 1) } : p
+    );
+    this.setPosts(posts);
+  }
+
+  createComment(postId: string, authorProfileId: string, body: string, id?: string): Post {
+    const trimmed = (body || '').trim();
+    if (!trimmed || trimmed.length > 500) {
+      throw new Error('Comment must be between 1 and 500 characters');
+    }
+    const comment: Post = {
+      id: id || generateUUID(),
+      author_profile_id: authorProfileId,
+      author_agent_id: null,
+      parent_id: postId,
+      body: trimmed,
+      created_at: new Date().toISOString(),
+      like_count: 0,
+      reply_count: 0,
+    };
+    const posts = this.getPosts().map((p) =>
+      p.id === postId ? { ...p, reply_count: (p.reply_count ?? 0) + 1 } : p
+    );
+    this.setPosts([...posts, comment]);
+    return comment;
+  }
+
+  listComments(postId: string): Post[] {
+    return this.getPosts()
+      .filter((p) => p.parent_id === postId)
+      .sort((a, b) => {
+        const dt = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        if (dt !== 0) return dt;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+  }
+
+  withAuthor(post: Post): PostWithAuthor {
+    const profiles = this.getProfiles();
+    const agents = this.getAgents();
+    let author_profile: PostAuthorProfile | null = null;
+    let author_agent: PostAuthorAgent | null = null;
+    if (post.author_profile_id) {
+      const found = profiles.find((p) => p.id === post.author_profile_id);
+      if (found) {
+        author_profile = {
+          id: found.id,
+          username: found.username,
+          profilename: found.profilename || found.name || null,
+        };
+      }
+    }
+    if (post.author_agent_id) {
+      const found = agents.find((a) => a.id === post.author_agent_id);
+      if (found) {
+        const owner = profiles.find((p) => p.id === found.owner_id);
+        author_agent = {
+          id: found.id,
+          name: found.name,
+          owner: owner
+            ? { id: owner.id, username: owner.username, profilename: owner.profilename || owner.name || null }
+            : null,
+        };
+      }
+    }
+    return {
+      ...post,
+      like_count: post.like_count ?? 0,
+      reply_count: post.reply_count ?? 0,
+      author_profile,
+      author_agent,
     };
   }
 
@@ -551,6 +669,8 @@ class LocalDB {
 
       return {
         ...post,
+        like_count: post.like_count ?? 0,
+        reply_count: post.reply_count ?? 0,
         author_profile,
         author_agent,
       };
@@ -688,6 +808,8 @@ const POSTS_EMBED_QUERY = `
   author_profile_id,
   author_agent_id,
   parent_id,
+  like_count,
+  reply_count,
   author_profile:profiles!author_profile_id (
     id,
     username,
@@ -703,6 +825,27 @@ const POSTS_EMBED_QUERY = `
     )
   )
 `;
+
+// One extra query per page: which of these posts has the viewer liked?
+async function attachLikedByMe(
+  posts: PostWithAuthor[],
+  viewerId?: string | null
+): Promise<PostWithAuthor[]> {
+  if (!viewerId || !supabase || posts.length === 0) {
+    return posts.map((p) => ({ ...p, liked_by_me: p.liked_by_me ?? false }));
+  }
+  const { data, error } = await supabase
+    .from('post_likes')
+    .select('post_id')
+    .eq('liker_profile_id', viewerId)
+    .in('post_id', posts.map((p) => p.id));
+  if (error) {
+    console.error('[db] attachLikedByMe failed:', error);
+    return posts.map((p) => ({ ...p, liked_by_me: false }));
+  }
+  const liked = new Set((data || []).map((r) => r.post_id as string));
+  return posts.map((p) => ({ ...p, liked_by_me: liked.has(p.id) }));
+}
 
 export const db = {
   // Profiles
@@ -1409,7 +1552,7 @@ export const db = {
           const sliced = hasMore ? rows.slice(0, limit) : rows;
           const nextCursor = hasMore && sliced.length > 0 ? encodeFeedCursor(sliced[sliced.length - 1]) : null;
           return {
-            posts: sliced,
+            posts: await attachLikedByMe(sliced, options?.viewerId),
             nextCursor,
             hasMore,
           };
@@ -1422,7 +1565,11 @@ export const db = {
     return localDb.fetchFeedPosts(options);
   },
 
-  async fetchPostsByProfile(profileId: string, limit = 50): Promise<PostWithAuthor[]> {
+  async fetchPostsByProfile(
+    profileId: string,
+    limit = 50,
+    viewerId?: string | null
+  ): Promise<PostWithAuthor[]> {
     if (!profileId) return [];
 
     if (shouldAttemptRemotePosts() && supabase) {
@@ -1439,7 +1586,7 @@ export const db = {
         if (error) {
           handlePostsError('fetchPostsByProfile', error);
         } else if (data) {
-          return data as unknown as PostWithAuthor[];
+          return attachLikedByMe(data as unknown as PostWithAuthor[], viewerId);
         }
       } catch (err) {
         handlePostsError('fetchPostsByProfile', err);
@@ -1447,6 +1594,220 @@ export const db = {
     }
 
     return localDb.fetchPostsByProfile(profileId, limit);
+  },
+
+  async fetchPostById(
+    postId: string,
+    viewerId?: string | null
+  ): Promise<PostWithAuthor | null> {
+    if (!postId) return null;
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .select(POSTS_EMBED_QUERY)
+          .eq('id', postId)
+          .maybeSingle();
+
+        if (error) {
+          handlePostsError('fetchPostById', error);
+        } else if (data) {
+          const [withLike] = await attachLikedByMe(
+            [data as unknown as PostWithAuthor],
+            viewerId
+          );
+          return withLike;
+        } else {
+          return null;
+        }
+      } catch (err) {
+        handlePostsError('fetchPostById', err);
+      }
+    }
+
+    const local = localDb.getPosts().find((p) => p.id === postId);
+    if (!local) return null;
+    const withAuthor = localDb.withAuthor(local);
+    withAuthor.liked_by_me = viewerId
+      ? localDb.getLikes().some(
+          (l) => l.post_id === postId && l.liker_profile_id === viewerId
+        )
+      : false;
+    return withAuthor;
+  },
+
+  async fetchComments(
+    postId: string,
+    options?: FetchCommentsOptions
+  ): Promise<CommentsResult> {
+    const limit = options?.limit ?? 20;
+    const cursor = options?.cursor;
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        let query = supabase
+          .from('posts')
+          .select(POSTS_EMBED_QUERY)
+          .eq('parent_id', postId)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .limit(limit + 1);
+
+        const decoded = decodeFeedCursor(cursor);
+        if (decoded) {
+          query = query.or(
+            `created_at.gt.${decoded.created_at},and(created_at.eq.${decoded.created_at},id.gt.${decoded.id})`
+          );
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          handlePostsError('fetchComments', error);
+        } else if (data) {
+          const rows = data as unknown as PostWithAuthor[];
+          const hasMore = rows.length > limit;
+          const sliced = hasMore ? rows.slice(0, limit) : rows;
+          const nextCursor =
+            hasMore && sliced.length > 0
+              ? encodeFeedCursor(sliced[sliced.length - 1])
+              : null;
+          return {
+            comments: await attachLikedByMe(sliced, options?.viewerId),
+            nextCursor,
+            hasMore,
+          };
+        }
+      } catch (err) {
+        handlePostsError('fetchComments', err);
+      }
+    }
+
+    const all = localDb.listComments(postId).map((p) => {
+      const withAuthor = localDb.withAuthor(p);
+      withAuthor.liked_by_me = options?.viewerId
+        ? localDb.getLikes().some(
+            (l) => l.post_id === p.id && l.liker_profile_id === options.viewerId
+          )
+        : false;
+      return withAuthor;
+    });
+    const decoded = decodeFeedCursor(cursor);
+    const filtered = decoded
+      ? all.filter(
+          (p) =>
+            new Date(p.created_at).getTime() > new Date(decoded.created_at).getTime() ||
+            (p.created_at === decoded.created_at && p.id > decoded.id)
+        )
+      : all;
+    const hasMore = filtered.length > limit;
+    const sliced = hasMore ? filtered.slice(0, limit) : filtered;
+    const nextCursor =
+      hasMore && sliced.length > 0
+        ? encodeFeedCursor(sliced[sliced.length - 1])
+        : null;
+    return { comments: sliced, nextCursor, hasMore };
+  },
+
+  async createComment(
+    postId: string,
+    body: string,
+    userId: string
+  ): Promise<PostWithAuthor> {
+    const trimmed = (body || '').trim();
+    if (!trimmed || trimmed.length > 500) {
+      throw new Error('Comment must be between 1 and 500 characters');
+    }
+    if (!postId || !userId) {
+      throw new Error('Cannot comment right now.');
+    }
+
+    if (shouldAttemptRemotePosts() && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .insert({
+            body: trimmed,
+            author_profile_id: userId,
+            author_agent_id: null,
+            parent_id: postId,
+          })
+          .select(POSTS_EMBED_QUERY)
+          .single();
+
+        if (error) {
+          if (!isPgrstMissingTable(error)) {
+            throw new Error(error.message || 'Unable to post comment. Please try again.');
+          }
+          handlePostsError('createComment', error);
+        } else if (data) {
+          const created = data as unknown as PostWithAuthor;
+          localDb.createComment(postId, userId, trimmed, created.id);
+          if (created.author_profile?.username) return created;
+          const p = await this.getProfile(userId);
+          if (!p) return created;
+          return {
+            ...created,
+            author_profile: {
+              id: p.id,
+              username: p.username,
+              profilename: p.profilename || p.name || null,
+            },
+          };
+        }
+      } catch (err) {
+        if (!isPgrstMissingTable(err)) throw err;
+        handlePostsError('createComment', err);
+      }
+    }
+
+    return localDb.withAuthor(localDb.createComment(postId, userId, trimmed));
+  },
+
+  async deleteComment(commentId: string, currentUserId: string): Promise<void> {
+    return this.deletePost(commentId, currentUserId);
+  },
+
+  async likePost(postId: string, userId: string): Promise<void> {
+    if (!postId || !userId) throw new Error('Cannot like right now.');
+
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('post_likes').insert({
+        post_id: postId,
+        liker_profile_id: userId,
+        liker_agent_id: null,
+      });
+      if (error) {
+        // Duplicate like: already liked. Sync state, not a failure.
+        if (error.code === '23505') return;
+        console.error('[db] likePost failed:', { postId, error });
+        throw new Error('Could not like this post. Please try again.');
+      }
+      localDb.likePost(postId, userId);
+      return;
+    }
+
+    localDb.likePost(postId, userId);
+  },
+
+  async unlikePost(postId: string, userId: string): Promise<void> {
+    if (!postId || !userId) return;
+
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase
+        .from('post_likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('liker_profile_id', userId);
+      if (error) {
+        console.error('[db] unlikePost failed:', { postId, error });
+        throw new Error('Could not remove your like. Please try again.');
+      }
+      localDb.unlikePost(postId, userId);
+      return;
+    }
+
+    localDb.unlikePost(postId, userId);
   },
 
   async createPost(input: CreatePostInput): Promise<PostWithAuthor> {

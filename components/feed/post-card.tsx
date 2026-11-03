@@ -2,15 +2,24 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/lib/auth-context';
+import { useRouter } from 'next/navigation';
+import { useAuth, isProfileOnboarded } from '@/lib/auth-context';
 import { db, formatFeedTimestamp } from '@/lib/db';
 import type { PostWithAuthor } from '@/types/database';
-import { Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Trash2, Loader2, AlertCircle, Heart, MessageCircle } from 'lucide-react';
 import styles from './feed.module.css';
 
 interface PostCardProps {
   post: PostWithAuthor;
   onPostDeleted?: (postId: string) => void;
+  isComment?: boolean;
+  onCommentClick?: () => void;
+}
+
+const compact = new Intl.NumberFormat('en', { notation: 'compact' });
+
+function formatCount(n: number): string {
+  return compact.format(Math.max(0, n));
 }
 
 function getAvatarLetters(name: string): string {
@@ -23,10 +32,20 @@ function getAvatarLetters(name: string): string {
   return clean.slice(0, 2).toUpperCase();
 }
 
-export default function PostCard({ post, onPostDeleted }: PostCardProps) {
+export default function PostCard({
+  post,
+  onPostDeleted,
+  isComment = false,
+  onCommentClick,
+}: PostCardProps) {
+  const router = useRouter();
   const { user, profile: ownProfile } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [liked, setLiked] = useState(Boolean(post.liked_by_me));
+  const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [likeError, setLikeError] = useState<string | null>(null);
 
   const isHuman = Boolean(post.author_profile_id);
 
@@ -53,6 +72,65 @@ export default function PostCard({ post, onPostDeleted }: PostCardProps) {
     }
   };
 
+  // Logged-out / not-onboarded viewers get sent to finish joining first,
+  // matching how the composer gates posting.
+  const requireJoined = (): boolean => {
+    if (!user) {
+      router.push('/login');
+      return false;
+    }
+    if (!isProfileOnboarded(ownProfile)) {
+      router.push('/onboarding');
+      return false;
+    }
+    return true;
+  };
+
+  const handleLike = async () => {
+    if (likeBusy) return;
+    if (!requireJoined()) return;
+    if (!user) return;
+
+    const nextLiked = !liked;
+    // Optimistic: flip immediately, roll back on failure.
+    setLiked(nextLiked);
+    setLikeCount((c) => Math.max(0, c + (nextLiked ? 1 : -1)));
+    setLikeError(null);
+    setLikeBusy(true);
+    try {
+      if (nextLiked) {
+        await db.likePost(post.id, user.id);
+      } else {
+        await db.unlikePost(post.id, user.id);
+      }
+    } catch (err: unknown) {
+      console.error('[PostCard] Failed to update like:', { postId: post.id, error: err });
+      setLiked(!nextLiked);
+      setLikeCount((c) => Math.max(0, c + (nextLiked ? -1 : 1)));
+      setLikeError('Could not update like. Try again.');
+    } finally {
+      setLikeBusy(false);
+    }
+  };
+
+  const handleCommentClick = () => {
+    if (onCommentClick) {
+      onCommentClick();
+      return;
+    }
+    router.push(`/posts/${post.id}`);
+  };
+
+  // Clicking the card body opens the post page. Clicks that land on a link,
+  // button or other control inside the card must not navigate. Keyboard users
+  // reach the page through the comment button and author links instead.
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (isComment) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('a, button, textarea, input, select, [role="button"]')) return;
+    router.push(`/posts/${post.id}`);
+  };
+
   // Author details resolution. When the embed missed the author row,
   // fall back to the signed-in profile for the viewer's own posts so
   // they never render as a generic "Member".
@@ -76,7 +154,11 @@ export default function PostCard({ post, onPostDeleted }: PostCardProps) {
   const ownerUsername = agent?.owner?.username || '';
 
   return (
-    <article className={styles.postCard} aria-labelledby={`post-author-${post.id}`}>
+    <article
+      className={styles.postCard}
+      aria-labelledby={`post-author-${post.id}`}
+      onClick={handleCardClick}
+    >
       {/* Left Avatar Column */}
       <div className={styles.authorAvatarCol}>
         {isHuman ? (
@@ -178,10 +260,51 @@ export default function PostCard({ post, onPostDeleted }: PostCardProps) {
         {/* Post Body: Strictly plain text with pre-wrap whitespace */}
         <p className={styles.postBody}>{post.body}</p>
 
-        {/* Card Footer: Reserved container accommodating future reply action/counts */}
+        {/* Card Footer: like + comment actions */}
         <footer className={styles.postFooter} aria-label="Post actions">
-          {/* Extension slot for upcoming reply feature */}
+          <button
+            type="button"
+            onClick={handleLike}
+            disabled={likeBusy}
+            className={styles.actionBtn}
+            aria-pressed={liked}
+            aria-label={liked ? 'Unlike this post' : 'Like this post'}
+            title={liked ? 'Unlike' : 'Like'}
+          >
+            <Heart
+              size={16}
+              fill={liked ? 'var(--human)' : 'none'}
+              color={liked ? 'var(--human)' : 'var(--ink-soft)'}
+              aria-hidden="true"
+            />
+            {likeCount > 0 && <span>{formatCount(likeCount)}</span>}
+          </button>
+
+          {!isComment && (
+            <button
+              type="button"
+              onClick={handleCommentClick}
+              className={styles.actionBtn}
+              aria-label={
+                (post.reply_count ?? 0) > 0
+                  ? `View ${post.reply_count} comments`
+                  : 'View comments'
+              }
+              title="Comments"
+            >
+              <MessageCircle size={16} color="var(--ink-soft)" aria-hidden="true" />
+              {(post.reply_count ?? 0) > 0 && (
+                <span>{formatCount(post.reply_count ?? 0)}</span>
+              )}
+            </button>
+          )}
         </footer>
+
+        {likeError && (
+          <p className={styles.likeError} role="alert">
+            {likeError}
+          </p>
+        )}
       </div>
     </article>
   );
