@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -10,13 +11,23 @@ from backend import config
 from backend.agents.runner import RunResult, run_agent_once
 from backend.auth import AuthError, verify_access_token
 from backend.database import get_admin_client
+from backend.llm import warn_if_model_unlisted
 
 logging.basicConfig(level=logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Best-effort startup check: warn if LLM_MODEL is not in /models.
+    await warn_if_model_unlisted()
+    yield
+
 
 app = FastAPI(
     title="Plus1 Autonomous Agent Network Backend",
     version="1.0.0",
     description="Python backend: agent brain (LLM decisions) for Plus1",
+    lifespan=lifespan,
 )
 
 # CORS: only the configured frontend origins, bearer-token auth (no cookies).

@@ -42,14 +42,15 @@ ALLOWED_ORIGINS = [
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
 # CHAT_GROQ is accepted as a fallback so the existing repo .env keeps working.
 LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("CHAT_GROQ", "")
-LLM_MODEL_FAST = os.getenv("LLM_MODEL_FAST", "llama-3.1-8b-instant")
-LLM_MODEL_SMART = os.getenv("LLM_MODEL_SMART", "openai/gpt-oss-120b")
+LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
+LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "").strip()
 LLM_TIMEOUT_SECONDS = _get_int("LLM_TIMEOUT_SECONDS", 30)
 
 # --- Agent brain limits (read once here, never hard-coded in logic) ---
 AGENT_COOLDOWN_SECONDS = _get_int("AGENT_COOLDOWN_SECONDS", 300)
 AGENT_DAILY_CAP = _get_int("AGENT_DAILY_CAP", 12)
 GLOBAL_DAILY_CALL_CAP = _get_int("GLOBAL_DAILY_CALL_CAP", 700)
+GLOBAL_DAILY_TOKEN_CAP = _get_int("GLOBAL_DAILY_TOKEN_CAP", 150000)
 AGENT_SKILL_MAX_CHARS = _get_int("AGENT_SKILL_MAX_CHARS", 2000)
 AGENT_POST_MAX_CHARS = _get_int("AGENT_POST_MAX_CHARS", 280)
 REPLY_MAX_DEPTH = _get_int("REPLY_MAX_DEPTH", 1)

@@ -114,6 +114,7 @@ class FakeClient:
         ]
         self.claim = {"ok": True, "reason": "ok", "retry_after_seconds": 0}
         self.claim_calls = 0
+        self.claim_params = None
         self.token_adds = []
         self.logs = []
         self._post_seq = 0
@@ -165,6 +166,7 @@ class FakeClient:
     def _run_rpc(self, fn, params):
         if fn == "claim_agent_call":
             self.claim_calls += 1
+            self.claim_params = dict(params)
             if getattr(self, "claim_error", None) is not None:
                 raise Exception(self.claim_error)
             return FakeExec(dict(self.claim))
@@ -400,3 +402,20 @@ def test_dry_run_decides_but_writes_no_post():
     assert result.text == "would-be post"
     assert len(db.posts) == 1
     assert db.claim_calls == 1  # dry runs still consume budget
+
+
+def test_claim_passes_token_cap_from_config(monkeypatch):
+    monkeypatch.setattr(config, "GLOBAL_DAILY_TOKEN_CAP", 12345)
+    db = FakeClient()
+    llm = stub_llm(json.dumps({"action": "none", "reason": "quiet day"}))
+    result = run(run_agent_once(AGENT_ID, client=db, llm_caller=llm))
+    assert result.status == "none"
+    assert db.claim_params["p_global_daily_token_cap"] == 12345
+
+
+def test_global_token_budget_skips_without_llm():
+    db = FakeClient()
+    db.claim = {"ok": False, "reason": "global_token_budget", "retry_after_seconds": 60}
+    result = run(run_agent_once(AGENT_ID, client=db, llm_caller=exploding_llm))
+    assert (result.status, result.reason) == ("skipped", "global_token_budget")
+    assert result.retry_after_seconds == 60

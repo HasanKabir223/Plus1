@@ -10,6 +10,7 @@ from backend.llm import (
     LLMRateLimited,
     LLMUnavailable,
     llm_complete,
+    warn_if_model_unlisted,
 )
 
 
@@ -39,7 +40,17 @@ class FakeAsyncClient:
         return False
 
     async def post(self, url, headers=None, json=None):
-        FakeAsyncClient.seen_requests.append({"url": url, "headers": headers, "json": json})
+        # Snapshot the body: the caller may mutate it between attempts, but
+        # a real client serializes each request at send time.
+        body = dict(json) if isinstance(json, dict) else json
+        FakeAsyncClient.seen_requests.append({"url": url, "headers": headers, "json": body})
+        item = FakeAsyncClient.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    async def get(self, url, headers=None):
+        FakeAsyncClient.seen_requests.append({"url": url, "headers": headers, "json": None})
         item = FakeAsyncClient.script.pop(0)
         if isinstance(item, Exception):
             raise item
@@ -53,7 +64,8 @@ def _fake_http(monkeypatch):
     monkeypatch.setattr(llm.httpx, "AsyncClient", FakeAsyncClient)
     monkeypatch.setattr(config, "LLM_API_KEY", "test-key")
     monkeypatch.setattr(config, "LLM_BASE_URL", "https://llm.test/v1")
-    monkeypatch.setattr(config, "LLM_MODEL_FAST", "fast-model")
+    monkeypatch.setattr(config, "LLM_MODEL", "test-model")
+    monkeypatch.setattr(config, "LLM_REASONING_EFFORT", "")
     # No real sleeping in retries.
     async def _no_sleep(_):
         return None
@@ -63,7 +75,7 @@ def _fake_http(monkeypatch):
 
 def _ok_payload(text='{"action": "none"}'):
     return {
-        "model": "fast-model",
+        "model": "test-model",
         "choices": [{"message": {"content": text}}],
         "usage": {"prompt_tokens": 10, "completion_tokens": 5},
     }
@@ -74,7 +86,7 @@ def test_success_extracts_content_and_usage():
     result = run(llm_complete([{"role": "user", "content": "hi"}]))
     assert result.text == '{"action": "none"}'
     assert (result.tokens_in, result.tokens_out) == (10, 5)
-    assert result.model == "fast-model"
+    assert result.model == "test-model"
     assert result.latency_ms >= 0
 
 
@@ -83,7 +95,7 @@ def test_request_shape_and_json_mode():
     run(llm_complete([{"role": "user", "content": "hi"}], max_tokens=50, temperature=0.1))
     req = FakeAsyncClient.seen_requests[0]
     assert req["url"] == "https://llm.test/v1/chat/completions"
-    assert req["json"]["model"] == "fast-model"
+    assert req["json"]["model"] == "test-model"
     assert req["json"]["response_format"] == {"type": "json_object"}
     assert req["headers"]["Authorization"] == "Bearer test-key"
 
@@ -147,3 +159,73 @@ def test_missing_key_raises_config_error(monkeypatch):
     with pytest.raises(LLMConfigError):
         run(llm_complete([{"role": "user", "content": "hi"}]))
     assert FakeAsyncClient.seen_requests == []
+
+
+def test_single_model_used_with_no_tier():
+    FakeAsyncClient.script = [FakeResponse(200, _ok_payload())]
+    run(llm_complete([{"role": "user", "content": "hi"}]))
+    req = FakeAsyncClient.seen_requests[0]
+    assert req["json"]["model"] == "test-model"
+
+
+def test_startup_warns_when_model_not_listed(monkeypatch, caplog):
+    monkeypatch.setattr(config, "LLM_MODEL", "missing-model")
+    FakeAsyncClient.script = [FakeResponse(200, {"data": [{"id": "other-model"}]})]
+    with caplog.at_level("WARNING", logger="backend.llm"):
+        run(warn_if_model_unlisted())
+    assert FakeAsyncClient.seen_requests[0]["url"] == "https://llm.test/v1/models"
+    assert any("missing-model" in r.message for r in caplog.records)
+
+
+def test_startup_silent_when_model_listed(caplog):
+    FakeAsyncClient.script = [FakeResponse(200, {"data": [{"id": "test-model"}]})]
+    with caplog.at_level("WARNING", logger="backend.llm"):
+        run(warn_if_model_unlisted())
+    assert not [r for r in caplog.records if "not in provider" in r.message]
+
+
+def test_startup_check_never_raises():
+    FakeAsyncClient.script = [httpx.TimeoutException("slow")]
+    assert run(warn_if_model_unlisted()) is None
+
+
+def test_effort_omitted_when_empty():
+    FakeAsyncClient.script = [FakeResponse(200, _ok_payload())]
+    run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert "reasoning_effort" not in FakeAsyncClient.seen_requests[0]["json"]
+
+
+def test_effort_sent_when_set(monkeypatch):
+    monkeypatch.setattr(config, "LLM_REASONING_EFFORT", "low")
+    FakeAsyncClient.script = [FakeResponse(200, _ok_payload())]
+    run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert FakeAsyncClient.seen_requests[0]["json"]["reasoning_effort"] == "low"
+
+
+def test_400_with_effort_retries_once_without_it(monkeypatch, caplog):
+    monkeypatch.setattr(config, "LLM_REASONING_EFFORT", "low")
+    FakeAsyncClient.script = [FakeResponse(400), FakeResponse(200, _ok_payload())]
+    with caplog.at_level("WARNING", logger="backend.llm"):
+        result = run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert result.text == '{"action": "none"}'
+    assert len(FakeAsyncClient.seen_requests) == 2
+    assert FakeAsyncClient.seen_requests[0]["json"]["reasoning_effort"] == "low"
+    assert "reasoning_effort" not in FakeAsyncClient.seen_requests[1]["json"]
+    assert any("reasoning_effort" in r.message for r in caplog.records)
+
+
+def test_400_without_effort_raises_immediately():
+    FakeAsyncClient.script = [FakeResponse(400)]
+    with pytest.raises(LLMConfigError):
+        run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert len(FakeAsyncClient.seen_requests) == 1
+
+
+def test_double_400_with_effort_raises(monkeypatch):
+    monkeypatch.setattr(config, "LLM_REASONING_EFFORT", "low")
+    FakeAsyncClient.script = [FakeResponse(400), FakeResponse(400)]
+    with pytest.raises(LLMConfigError):
+        run(llm_complete([{"role": "user", "content": "hi"}]))
+    # Bounded: the field is dropped once, the second 400 is terminal.
+    assert len(FakeAsyncClient.seen_requests) == 2
+    assert "reasoning_effort" not in FakeAsyncClient.seen_requests[1]["json"]

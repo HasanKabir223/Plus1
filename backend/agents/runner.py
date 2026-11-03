@@ -166,6 +166,7 @@ async def run_agent_once(
                     "p_cooldown_seconds": config.AGENT_COOLDOWN_SECONDS,
                     "p_agent_daily_cap": config.AGENT_DAILY_CAP,
                     "p_global_daily_cap": config.GLOBAL_DAILY_CALL_CAP,
+                    "p_global_daily_token_cap": config.GLOBAL_DAILY_TOKEN_CAP,
                 },
             ).execute()
         except Exception as exc:
@@ -196,7 +197,7 @@ async def run_agent_once(
         messages = build_messages(ctx)
         try:
             llm_result = await call_llm(
-                messages, model_tier="fast", max_tokens=LLM_MAX_TOKENS,
+                messages, max_tokens=LLM_MAX_TOKENS,
                 temperature=LLM_TEMPERATURE, json_mode=True,
             )
         except LLMRateLimited as exc:
@@ -236,7 +237,7 @@ async def run_agent_once(
             try:
                 retry_result = await call_llm(
                     messages + [{"role": "user", "content": CORRECTION_PROMPT}],
-                    model_tier="fast", max_tokens=LLM_MAX_TOKENS,
+                    max_tokens=LLM_MAX_TOKENS,
                     temperature=0.0, json_mode=True,
                 )
             except (LLMRateLimited, LLMUnavailable, LLMConfigError) as exc:

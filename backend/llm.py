@@ -1,7 +1,7 @@
 """Swappable LLM wrapper over an OpenAI-compatible /chat/completions API.
 
 Pointed at Groq's free tier by default (see backend/config.py), but every
-setting -- base URL, key, model names -- comes from env vars, so the provider
+setting -- base URL, key, model id -- comes from env vars, so the provider
 can change without touching code. Uses plain async httpx, no SDK needed.
 
 Never logs the API key or full prompts; only model, latency, token counts,
@@ -12,7 +12,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 
@@ -48,13 +48,6 @@ class LLMResult:
     tokens_in: int
     tokens_out: int
     latency_ms: int
-
-
-def _model_for_tier(model_tier: str) -> str:
-    # Tier names are ours; the actual model ids live in env vars.
-    if model_tier == "smart":
-        return config.LLM_MODEL_SMART
-    return config.LLM_MODEL_FAST
 
 
 def _extract_content(payload: dict[str, Any]) -> str:
@@ -104,13 +97,14 @@ def _retry_after_seconds(resp: httpx.Response) -> int | None:
 async def llm_complete(
     messages: list[dict[str, str]],
     *,
-    model_tier: Literal["fast", "smart"] = "fast",
     max_tokens: int = 400,
     temperature: float = 0.8,
     json_mode: bool = True,
 ) -> LLMResult:
     """Call the chat-completions API once and return the result.
 
+    When LLM_REASONING_EFFORT is set, it is sent as reasoning_effort; a 400
+    on such a request drops the field and resends once before giving up.
     Raises LLMRateLimited on 429, LLMUnavailable after one retry on
     timeouts/5xx, LLMConfigError on missing key / 401 / 400.
     """
@@ -119,7 +113,7 @@ async def llm_complete(
     if not messages:
         raise LLMConfigError("llm_complete called with no messages")
 
-    model = _model_for_tier(model_tier)
+    model = config.LLM_MODEL
     url = f"{config.LLM_BASE_URL}/chat/completions"
     body: dict[str, Any] = {
         "model": model,
@@ -130,6 +124,9 @@ async def llm_complete(
     if json_mode:
         # A hint, not a guarantee: callers must still parse defensively.
         body["response_format"] = {"type": "json_object"}
+    effort = (config.LLM_REASONING_EFFORT or "").strip()
+    if effort:
+        body["reasoning_effort"] = effort
 
     headers = {
         "Authorization": f"Bearer {config.LLM_API_KEY}",
@@ -137,7 +134,9 @@ async def llm_complete(
     }
 
     last_error: Exception | None = None
-    for attempt in (1, 2):
+    effort_dropped = False
+    attempt = 1
+    while True:
         started = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT_SECONDS) as client:
@@ -146,6 +145,7 @@ async def llm_complete(
             last_error = exc
             logger.warning("llm attempt %d failed: %s", attempt, type(exc).__name__)
             if attempt == 1:
+                attempt = 2
                 await asyncio.sleep(1.0)
                 continue
             raise LLMUnavailable(f"llm request failed: {type(exc).__name__}") from exc
@@ -166,6 +166,16 @@ async def llm_complete(
             raise LLMConfigError("LLM provider rejected the API key")
 
         if resp.status_code == 400:
+            if "reasoning_effort" in body and not effort_dropped:
+                # The field itself may be the problem: drop it and resend
+                # once within the same attempt (no backoff, no budget cost).
+                effort_dropped = True
+                dropped = body.pop("reasoning_effort")
+                logger.warning(
+                    "llm reasoning_effort %r rejected model=%s, retrying without it",
+                    dropped, model,
+                )
+                continue
             logger.error("llm bad request model=%s status=400", model)
             raise LLMConfigError("LLM provider rejected the request")
 
@@ -176,6 +186,7 @@ async def llm_complete(
                 attempt, model, resp.status_code,
             )
             if attempt == 1:
+                attempt = 2
                 await asyncio.sleep(1.0)
                 continue
             raise last_error
@@ -203,5 +214,38 @@ async def llm_complete(
             latency_ms=latency_ms,
         )
 
-    # Unreachable in practice; keeps the type checker honest.
-    raise LLMUnavailable(f"llm request failed: {last_error}")
+
+async def warn_if_model_unlisted() -> None:
+    """Best-effort startup check: warn if LLM_MODEL is absent from /models.
+
+    Warning only; never raises and never falls back to another model.
+    """
+    if not config.LLM_API_KEY:
+        return
+    url = f"{config.LLM_BASE_URL}/models"
+    headers = {
+        "Authorization": f"Bearer {config.LLM_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=headers)
+    except (httpx.TimeoutException, httpx.TransportError) as exc:
+        logger.warning("startup model check skipped: %s", type(exc).__name__)
+        return
+    if resp.status_code != 200:
+        logger.warning(
+            "startup model check skipped: /models returned %d", resp.status_code
+        )
+        return
+    try:
+        payload = resp.json()
+    except ValueError:
+        logger.warning("startup model check skipped: /models returned invalid JSON")
+        return
+    data = payload.get("data") or []
+    ids = {m.get("id") for m in data if isinstance(m, dict)}
+    if config.LLM_MODEL not in ids:
+        logger.warning(
+            "LLM_MODEL %s not in provider /models list", config.LLM_MODEL
+        )
