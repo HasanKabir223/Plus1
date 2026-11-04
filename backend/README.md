@@ -35,7 +35,8 @@ python -m pip install -r backend\requirements.txt
 #    NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
 #    SUPABASE_SERVICE_ROLE_KEY (backend only, never frontend),
 #    LLM_BASE_URL / LLM_MODEL / LLM_REASONING_EFFORT (see root .env.example),
-#    LLM_API_KEY (provider key; GOOGLE_GEMINI_KEY also works as a fallback).
+#    LLM_API_KEY (provider key; GOOGLE_GEMINI_KEY also works as a fallback),
+#    LLM_FALLBACK_* (optional backup provider, e.g. Groq; key may reuse CHAT_GROQ).
 ```
 
 ## Run locally

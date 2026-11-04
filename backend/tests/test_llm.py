@@ -67,6 +67,11 @@ def _fake_http(monkeypatch):
     monkeypatch.setattr(config, "LLM_BASE_URL", "https://llm.test/v1")
     monkeypatch.setattr(config, "LLM_MODEL", "test-model")
     monkeypatch.setattr(config, "LLM_REASONING_EFFORT", "")
+    # Failover is opt-in per test; the real .env may configure it.
+    monkeypatch.setattr(config, "LLM_FALLBACK_BASE_URL", "")
+    monkeypatch.setattr(config, "LLM_FALLBACK_API_KEY", "")
+    monkeypatch.setattr(config, "LLM_FALLBACK_MODEL", "")
+    monkeypatch.setattr(config, "LLM_FALLBACK_REASONING_EFFORT", "")
     # No real sleeping in retries.
     async def _no_sleep(_):
         return None
@@ -273,3 +278,75 @@ def test_double_400_with_effort_raises(monkeypatch):
     # Bounded: the field is dropped once, the second 400 is terminal.
     assert len(FakeAsyncClient.seen_requests) == 2
     assert "reasoning_effort" not in FakeAsyncClient.seen_requests[1]["json"]
+
+
+def _enable_fallback(monkeypatch):
+    monkeypatch.setattr(config, "LLM_FALLBACK_BASE_URL", "https://fallback.test/v1")
+    monkeypatch.setattr(config, "LLM_FALLBACK_API_KEY", "fallback-key")
+    monkeypatch.setattr(config, "LLM_FALLBACK_MODEL", "fallback-model")
+    monkeypatch.setattr(config, "LLM_FALLBACK_REASONING_EFFORT", "")
+
+
+def test_fallback_recovers_primary_429(monkeypatch):
+    _enable_fallback(monkeypatch)
+    FakeAsyncClient.script = [FakeResponse(429), FakeResponse(200, _ok_payload())]
+    result = run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert result.text == '{"action": "none"}'
+    assert result.via_fallback is True
+    assert FakeAsyncClient.seen_requests[0]["url"] == "https://llm.test/v1/chat/completions"
+    assert FakeAsyncClient.seen_requests[1]["url"] == "https://fallback.test/v1/chat/completions"
+    assert FakeAsyncClient.seen_requests[1]["json"]["model"] == "fallback-model"
+    fallback_auth = FakeAsyncClient.seen_requests[1]["headers"]["Authorization"]
+    # (Compared in parts: the fallback request must carry the fallback key
+    # under the Bearer scheme.)
+    scheme, _, token = fallback_auth.partition(" ")
+    assert scheme == "Bearer"
+    assert token == "fallback-key"
+
+
+def test_fallback_recovers_primary_timeout(monkeypatch):
+    _enable_fallback(monkeypatch)
+    FakeAsyncClient.script = [
+        httpx.TimeoutException("slow"),
+        httpx.TimeoutException("slow"),
+        FakeResponse(200, _ok_payload()),
+    ]
+    result = run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert result.via_fallback is True
+    assert len(FakeAsyncClient.seen_requests) == 3
+
+
+def test_fallback_recovers_double_generation_rejection(monkeypatch):
+    _enable_fallback(monkeypatch)
+    FakeAsyncClient.script = [
+        FakeResponse(400, _GENERATION_400),
+        FakeResponse(400, _GENERATION_400),
+        FakeResponse(200, _ok_payload()),
+    ]
+    result = run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert result.via_fallback is True
+    assert len(FakeAsyncClient.seen_requests) == 3
+
+
+def test_fallback_also_failing_raises(monkeypatch):
+    _enable_fallback(monkeypatch)
+    FakeAsyncClient.script = [FakeResponse(429), FakeResponse(429)]
+    with pytest.raises(LLMRateLimited):
+        run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert len(FakeAsyncClient.seen_requests) == 2
+
+
+def test_config_error_never_fails_over(monkeypatch):
+    _enable_fallback(monkeypatch)
+    FakeAsyncClient.script = [FakeResponse(400)]
+    with pytest.raises(LLMConfigError):
+        run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert len(FakeAsyncClient.seen_requests) == 1
+
+
+def test_no_fallback_when_unconfigured():
+    # The fixture leaves the fallback triple empty: one attempt, then raise.
+    FakeAsyncClient.script = [FakeResponse(429)]
+    with pytest.raises(LLMRateLimited):
+        run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert len(FakeAsyncClient.seen_requests) == 1

@@ -57,6 +57,7 @@ class LLMResult:
     tokens_in: int
     tokens_out: int
     latency_ms: int
+    via_fallback: bool = False
 
 
 def _extract_content(payload: dict[str, Any]) -> str:
@@ -131,7 +132,7 @@ async def llm_complete(
     temperature: float = 0.8,
     json_mode: bool = True,
 ) -> LLMResult:
-    """Call the chat-completions API once and return the result.
+    """Call the chat-completions API and return the result.
 
     When LLM_REASONING_EFFORT is set, it is sent as reasoning_effort; a 400
     on such a request drops the field and resends once before giving up.
@@ -139,14 +140,55 @@ async def llm_complete(
     timeouts/5xx, LLMConfigError on missing key / 401 / other 400s, and
     LLMGenerationError when the provider rejects its own sampled output
     (400 json_validate_failed) twice in a row.
+
+    When a fallback provider is configured (see config.llm_fallback_configured),
+    rate-limit / unreachable / generation failures on the primary retry the
+    same request on the fallback once; the returned result has
+    via_fallback=True. Config errors never fail over.
     """
     if not config.LLM_API_KEY:
         raise LLMConfigError("LLM_API_KEY is not configured")
     if not messages:
         raise LLMConfigError("llm_complete called with no messages")
 
-    model = config.LLM_MODEL
-    url = f"{config.LLM_BASE_URL}/chat/completions"
+    try:
+        return await _complete_once(
+            config.LLM_BASE_URL, config.LLM_API_KEY, config.LLM_MODEL,
+            (config.LLM_REASONING_EFFORT or "").strip(),
+            messages, max_tokens=max_tokens,
+            temperature=temperature, json_mode=json_mode,
+            via_fallback=False,
+        )
+    except (LLMRateLimited, LLMUnavailable, LLMGenerationError) as exc:
+        if not config.llm_fallback_configured():
+            raise
+        logger.warning(
+            "llm primary failed (%s), failing over to %s",
+            type(exc).__name__, config.LLM_FALLBACK_MODEL,
+        )
+        return await _complete_once(
+            config.LLM_FALLBACK_BASE_URL, config.LLM_FALLBACK_API_KEY,
+            config.LLM_FALLBACK_MODEL, config.LLM_FALLBACK_REASONING_EFFORT,
+            messages, max_tokens=max_tokens,
+            temperature=temperature, json_mode=json_mode,
+            via_fallback=True,
+        )
+
+
+async def _complete_once(
+    base_url: str,
+    api_key: str,
+    model: str,
+    effort: str,
+    messages: list[dict[str, str]],
+    *,
+    max_tokens: int,
+    temperature: float,
+    json_mode: bool,
+    via_fallback: bool,
+) -> LLMResult:
+    """One provider's attempt loop (internal retries only, no failover)."""
+    url = f"{base_url}/chat/completions"
     body: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -156,12 +198,11 @@ async def llm_complete(
     if json_mode:
         # A hint, not a guarantee: callers must still parse defensively.
         body["response_format"] = {"type": "json_object"}
-    effort = (config.LLM_REASONING_EFFORT or "").strip()
     if effort:
         body["reasoning_effort"] = effort
 
     headers = {
-        "Authorization": f"Bearer {config.LLM_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
@@ -259,6 +300,7 @@ async def llm_complete(
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             latency_ms=latency_ms,
+            via_fallback=via_fallback,
         )
 
 

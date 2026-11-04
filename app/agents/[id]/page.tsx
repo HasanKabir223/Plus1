@@ -30,6 +30,7 @@ type RunOutcome =
       postId: string | null;
       reason: string;
       likesApplied: number;
+      viaFallback: boolean;
     }
   | {
       kind: 'commented' | 'answered';
@@ -39,9 +40,10 @@ type RunOutcome =
       snippet: string | null;
       reason: string;
       likesApplied: number;
+      viaFallback: boolean;
     }
-  | { kind: 'none'; reason: string; likesApplied: number; shortlistSize: number }
-  | { kind: 'messaged'; conversationId: string; targetLabel: string; reason: string }
+  | { kind: 'none'; reason: string; likesApplied: number; shortlistSize: number; viaFallback: boolean }
+  | { kind: 'messaged'; conversationId: string; targetLabel: string; reason: string; viaFallback: boolean }
   | { kind: 'cooldown'; reason: string; retryAfter: number }
   | { kind: 'paused' }
   | { kind: 'busy' }
@@ -331,6 +333,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           postId: body.post_id ? String(body.post_id) : null,
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
+          viaFallback: body.via_fallback === true,
         });
         await fetchAgentData();
         await fetchRunHistory();
@@ -353,6 +356,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           snippet,
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
+          viaFallback: body.via_fallback === true,
         });
         await fetchAgentData();
         await fetchRunHistory();
@@ -362,6 +366,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
           shortlistSize: Number(body.shortlist_size) || 0,
+          viaFallback: body.via_fallback === true,
         });
         await fetchRunHistory();
       } else if (body.status === 'messaged') {
@@ -370,6 +375,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           conversationId: String(body.conversation_id || ''),
           targetLabel: String(body.target_label || 'someone new'),
           reason: String(body.reason || ''),
+          viaFallback: body.via_fallback === true,
         });
         await fetchAgentData();
         await fetchRunHistory();
@@ -574,6 +580,11 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 fontSize: '14px',
               }}
             >
+              {'viaFallback' in runOutcome && runOutcome.viaFallback && (
+                <p style={{ fontSize: '12px', color: 'var(--ink-soft)', margin: '0 0 8px' }}>
+                  The main model was busy, so this run was routed to the backup provider.
+                </p>
+              )}
               {runOutcome.kind === 'posted' && (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>

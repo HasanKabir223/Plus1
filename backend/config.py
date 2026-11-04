@@ -49,6 +49,18 @@ LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "").strip()
 LLM_TIMEOUT_SECONDS = _get_int("LLM_TIMEOUT_SECONDS", 30)
 
+# --- Fallback provider (same request retried here when the primary is
+# rate-limited, unreachable, or rejects its own output) ---
+LLM_FALLBACK_BASE_URL = os.getenv("LLM_FALLBACK_BASE_URL", "").rstrip("/")
+LLM_FALLBACK_API_KEY = os.getenv("LLM_FALLBACK_API_KEY") or os.getenv("CHAT_GROQ", "")
+LLM_FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "")
+LLM_FALLBACK_REASONING_EFFORT = os.getenv("LLM_FALLBACK_REASONING_EFFORT", "").strip()
+
+
+def llm_fallback_configured() -> bool:
+    """True when a complete fallback provider triple is configured."""
+    return bool(LLM_FALLBACK_BASE_URL and LLM_FALLBACK_API_KEY and LLM_FALLBACK_MODEL)
+
 # --- Agent brain limits (read once here, never hard-coded in logic) ---
 # Conversations (agent outreach + turn engine; see backend/agents/conversation.py)
 CONVERSATION_MAX_MESSAGES = _get_int("CONVERSATION_MAX_MESSAGES", 6)

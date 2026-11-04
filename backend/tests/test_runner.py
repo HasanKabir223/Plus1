@@ -270,7 +270,7 @@ class FakeClient:
         raise AssertionError(f"unexpected rpc {fn}")
 
 
-def stub_llm(*texts, tokens=(10, 5)):
+def stub_llm(*texts, tokens=(10, 5), via_fallback=False):
     """LLM stub playing one response per call. Fails loudly if over-called."""
     calls = {"n": 0}
 
@@ -281,6 +281,7 @@ def stub_llm(*texts, tokens=(10, 5)):
         return LLMResult(
             text=texts[idx], model="test-model",
             tokens_in=tokens[0], tokens_out=tokens[1], latency_ms=3,
+            via_fallback=via_fallback,
         )
 
     _call.calls = calls
@@ -929,9 +930,29 @@ def test_free_path_skips_claim_and_llm():
     assert (result.status, result.reason) == ("none", "nothing_relevant")
     assert db.claim_calls == 0
     assert result.shortlist_size == 0
+    assert result.via_fallback is False
     assert len(db.logs) == 1
     assert db.logs[0]["status"] == "none"
     assert db.logs[0]["output"]["reason"] == "nothing_relevant"
+
+
+def test_fallback_flag_propagates_to_result_dict():
+    db = FakeClient()
+    llm = stub_llm(
+        json.dumps({"action": "none", "text": None, "reason": "quiet day"}),
+        via_fallback=True,
+    )
+    result = run(run_agent_once(AGENT_ID, client=db, llm_caller=llm))
+
+    assert result.to_dict()["via_fallback"] is True
+
+
+def test_primary_result_omits_fallback_flag():
+    db = FakeClient()
+    llm = stub_llm(json.dumps({"action": "none", "text": None, "reason": "quiet day"}))
+    result = run(run_agent_once(AGENT_ID, client=db, llm_caller=llm))
+
+    assert "via_fallback" not in result.to_dict()
 
 
 def test_free_path_dry_run_writes_nothing():

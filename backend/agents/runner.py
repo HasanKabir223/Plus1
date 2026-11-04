@@ -67,6 +67,7 @@ class RunResult:
     shortlist_size: int | None = None
     scores: list[dict[str, Any]] | None = None
     awaiting_threads_seen: int | None = None
+    via_fallback: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"status": self.status, "reason": self.reason}
@@ -96,6 +97,8 @@ class RunResult:
             body["scores"] = self.scores
         if self.awaiting_threads_seen is not None:
             body["awaiting_threads_seen"] = self.awaiting_threads_seen
+        if self.via_fallback:
+            body["via_fallback"] = True
         return body
 
 
@@ -369,6 +372,7 @@ async def run_agent_once(
         model = llm_result.model
         tokens_in, tokens_out = llm_result.tokens_in, llm_result.tokens_out
         latency_ms = llm_result.latency_ms
+        used_fallback = bool(getattr(llm_result, "via_fallback", False))
         _add_tokens(db, tokens_in + tokens_out)
 
         # 4. Parse, with ONE correction retry inside the same claimed budget.
@@ -403,6 +407,9 @@ async def run_agent_once(
             tokens_in += retry_result.tokens_in
             tokens_out += retry_result.tokens_out
             latency_ms += retry_result.latency_ms
+            used_fallback = used_fallback or bool(
+                getattr(retry_result, "via_fallback", False)
+            )
             _add_tokens(db, retry_result.tokens_in + retry_result.tokens_out)
             try:
                 parsed = parse_decision(retry_result.text)
@@ -476,6 +483,7 @@ async def run_agent_once(
                 likes_would_apply=(len(like_ids) if dry_run else 0),
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
+                via_fallback=used_fallback,
             )
 
         like_ids = decision.like_post_ids
@@ -497,6 +505,7 @@ async def run_agent_once(
                 likes_would_apply=(len(like_ids) if dry_run else 0),
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
+                via_fallback=used_fallback,
             )
 
         if decision.action == "none":
@@ -513,6 +522,7 @@ async def run_agent_once(
                 likes_would_apply=(len(like_ids) if dry_run else 0),
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
+                via_fallback=used_fallback,
             )
 
         # 6. Comment safety re-checks against live DB state (the shortlist
@@ -660,6 +670,7 @@ async def run_agent_once(
                     likes_would_apply=len(like_ids),
                     shortlist_size=shortlist_size, scores=log_scores,
                     awaiting_threads_seen=len(ctx.awaiting_threads),
+                    via_fallback=used_fallback,
                 )
 
             target = next(
@@ -681,6 +692,7 @@ async def run_agent_once(
                     likes_applied=likes_applied,
                     shortlist_size=shortlist_size, scores=log_scores,
                     awaiting_threads_seen=len(ctx.awaiting_threads),
+                    via_fallback=used_fallback,
                 )
 
             # Python writes the disclosure line; the model never does.
@@ -762,6 +774,7 @@ async def run_agent_once(
                 target_label=target.display_name,
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
+                via_fallback=used_fallback,
             )
 
         if dry_run:
@@ -780,6 +793,7 @@ async def run_agent_once(
                 likes_would_apply=len(like_ids),
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
+                via_fallback=used_fallback,
             )
 
         # 7. Write the post/comment/answer as the agent (service role
@@ -844,6 +858,7 @@ async def run_agent_once(
             answered_comment_id=reply_to_id,
             shortlist_size=shortlist_size, scores=log_scores,
             awaiting_threads_seen=len(ctx.awaiting_threads),
+            via_fallback=used_fallback,
         )
     except Exception:
         # Real bug: log a best-effort row, then re-raise so the endpoint

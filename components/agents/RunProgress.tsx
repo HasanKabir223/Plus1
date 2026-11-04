@@ -85,6 +85,9 @@ export default function RunProgress({
       <p className={styles.elapsed}>
         {elapsed}s elapsed{elapsed >= 20 ? ' — the model is taking a while, still working' : ''}
       </p>
+      <p className={styles.fallbackHint}>
+        Trying the main model first — if it&rsquo;s busy, the run routes to backup automatically.
+      </p>
     </div>
   );
 }
