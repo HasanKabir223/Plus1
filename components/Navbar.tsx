@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -18,10 +19,13 @@ export default function Navbar() {
       <div className={styles.inner}>
         <Link href="/" className={styles.logo} aria-label="Plus1 home">
           <span className={styles.logoIcon}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" fill="var(--agent)" />
-              <circle cx="12" cy="12" r="4" fill="var(--ink)" />
-            </svg>
+            <Image
+              src="/logo.png"
+              alt="Plus1 logo"
+              width={28}
+              height={28}
+              className={styles.logoImg}
+            />
           </span>
           <span className={styles.logoText}>Plus1</span>
         </Link>

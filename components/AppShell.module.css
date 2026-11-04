@@ -35,6 +35,12 @@
   margin-bottom: 14px;
 }
 
+.brandLogo {
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: block;
+}
+
 .brandBadge {
   background-color: var(--agent);
   color: var(--ink);
@@ -59,9 +65,10 @@
   font-size: 15px;
   font-weight: 500;
   color: var(--ink-soft);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   transition: background-color 120ms ease, color 120ms ease;
   position: relative;
+  min-height: 46px;
 }
 
 .navLink:hover {
@@ -91,8 +98,8 @@
 }
 
 .sidebarAction {
-  margin-top: 16px;
-  padding: 0 4px;
+  margin: 0 0 12px;
+  padding: 0;
 }
 
 .createBtn {
@@ -132,17 +139,26 @@
 .userCard {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  cursor: pointer;
-  transition: background-color 120ms ease;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-md);
   width: 100%;
-  text-align: left;
 }
 
-.userCard:hover {
+.userProfileBtn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  transition: background-color 120ms ease;
+  min-height: 52px;
+}
+
+.userProfileBtn:hover {
   background-color: var(--surface);
 }
 
@@ -213,6 +229,16 @@
 .logoutBtn:hover {
   color: var(--err);
   background-color: var(--surface);
+}
+
+.navLink:focus-visible,
+.createBtn:focus-visible,
+.userProfileBtn:focus-visible,
+.logoutBtn:focus-visible,
+.mobileNavItem:focus-visible,
+.mobileCreateBtn:focus-visible {
+  outline: 2px solid var(--human);
+  outline-offset: 2px;
 }
 
 /* Mobile Header (Hidden on Desktop) */
@@ -344,23 +370,35 @@
     align-items: center;
   }
 
-  .brand span,
-  .navLink span,
+  .navLabel,
   .createBtn span,
   .userInfo,
-  .brandBadge {
+  .brandBadge,
+  .brandWord {
     display: none;
   }
 
   .brand {
     padding: 8px;
     justify-content: center;
+    margin-bottom: 10px;
   }
 
   .navLink {
     justify-content: center;
     padding: 12px 8px;
     gap: 0;
+  }
+
+  /* Unread badge pins to the icon corner instead of vanishing */
+  .navBadge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    margin: 0;
+    padding: 1px 5px;
+    font-size: 10px;
+    line-height: 1.4;
   }
 
   .createBtn {
@@ -372,7 +410,13 @@
   }
 
   .userCard {
-    padding: 6px;
+    padding: 4px;
+    justify-content: center;
+  }
+
+  .userProfileBtn {
+    padding: 0;
+    min-height: 0;
     justify-content: center;
   }
 
@@ -391,7 +435,7 @@
     border-right: none;
     width: 100%;
     min-width: 100%;
-    padding-bottom: 68px; /* space for mobile bottom bar */
+    padding-bottom: calc(68px + env(safe-area-inset-bottom)); /* space for mobile bottom bar */
   }
 
   /* Mobile Top Bar */
@@ -420,7 +464,7 @@
 
   .header {
     padding: 10px 16px;
-    top: 48px; /* sits below mobile top bar when both present */
+    top: 57px; /* sits below mobile top bar when both present (10 + 36 + 10 + 1px border) */
   }
 
   .headerTitle {
@@ -436,11 +480,11 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 56px;
+    min-height: 56px;
     z-index: 99;
     background-color: var(--paper);
     border-top: 1px solid var(--line);
-    padding: 0 4px;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
   }
 
   .mobileNavItem {
@@ -454,9 +498,17 @@
     color: var(--ink-soft);
     text-decoration: none;
     position: relative;
-    padding: 6px 10px;
+    padding: 6px 4px;
     border-radius: var(--radius-sm);
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .mobileNavItem > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobileNavItemActive {
@@ -467,7 +519,7 @@
   .mobileBadge {
     position: absolute;
     top: 2px;
-    right: 18px;
+    right: calc(50% - 24px);
     background-color: var(--agent);
     color: var(--ink);
     font-size: 10px;
@@ -487,6 +539,19 @@
     align-items: center;
     justify-content: center;
     border: 1.5px solid var(--ink);
+    cursor: pointer;
+  }
+
+  .mobileTopActions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mobileAvatarBtn {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
     cursor: pointer;
   }
 }

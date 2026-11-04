@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -10,7 +11,6 @@ import styles from './AppShell.module.css';
 import {
   Home,
   Compass,
-  Inbox,
   User,
   Plus,
   LogOut,
@@ -28,18 +28,13 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile, signOut } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
   const [userAgents, setUserAgents] = useState<Agent[]>([]);
 
 
-  // Load unread count and user agents from DB
+  // Load user agents from DB
   const loadSidebarData = async () => {
     if (!user) return;
     try {
-      const items = await db.getInboxItems(user.id);
-      const unread = items.filter((i) => !i.read_at).length;
-      setUnreadCount(unread);
-
       const agents = await db.getAgentsByOwner(user.id);
       setUserAgents(agents);
     } catch (e) {
@@ -51,10 +46,8 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
     void Promise.resolve().then(() => {
       loadSidebarData();
     });
-    const unsubInbox = db.subscribe('inbox', loadSidebarData);
     const unsubAgents = db.subscribe('agents', loadSidebarData);
     return () => {
-      unsubInbox();
       unsubAgents();
     };
   }, [user]);
@@ -72,7 +65,6 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
     { href: '/home', label: 'Home', icon: Home, badge: 0 },
     { href: '/explore', label: 'Explore', icon: Compass, badge: 0 },
     { href: '/messages', label: 'Messages', icon: MessageCircle, badge: 0 },
-    { href: '/home#inbox', label: 'Inbox', icon: Inbox, badge: unreadCount },
     { href: profile?.username ? `/u/${profile.username}` : '/onboarding', label: 'Profile', icon: User, badge: 0 },
   ];
 
@@ -82,7 +74,14 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
       <aside className={styles.sidebar}>
         <div>
           <Link href="/home" className={styles.brand}>
-            <span>Plus1</span>
+            <Image
+              src="/logo.png"
+              alt="Plus1 logo"
+              width={30}
+              height={30}
+              className={styles.brandLogo}
+            />
+            <span className={styles.brandWord}>Plus1</span>
             <span className={styles.brandBadge}>Network</span>
           </Link>
 
@@ -95,17 +94,23 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
                   key={item.href}
                   href={item.href}
                   className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
+                  title={item.label}
                 >
                   <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                  <span>{item.label}</span>
+                  <span className={styles.navLabel}>{item.label}</span>
                   {item.badge > 0 && <span className={styles.navBadge}>{item.badge}</span>}
                 </Link>
               );
             })}
           </nav>
+        </div>
 
+        {/* Bottom cluster: primary action above the user card */}
+        <div>
           <div className={styles.sidebarAction}>
             <button
+              type="button"
               onClick={() => router.push('/agents/new')}
               className={styles.createBtn}
             >
@@ -113,26 +118,34 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
               <span>Create agent</span>
             </button>
           </div>
-        </div>
-
-        {/* User Badge at Bottom */}
-        <div className={styles.userSection}>
-          <div className={styles.userCard}>
-            <div className={styles.humanAvatar}>
-              {userInitial}
+            <div className={styles.userSection}>
+              <div className={styles.userCard}>
+                <button
+                  type="button"
+                  onClick={() => profile?.username && router.push(`/u/${profile.username}`)}
+                  className={styles.userProfileBtn}
+                  title="View profile"
+                  aria-label={displayName ? `View profile of ${displayName}` : 'View profile'}
+                >
+                  <div className={styles.humanAvatar} aria-hidden="true">
+                    {userInitial}
+                  </div>
+                  <div className={styles.userInfo}>
+                    <div className={styles.userName}>{displayName}</div>
+                    {profile?.username && <div className={styles.userHandle}>@{profile.username}</div>}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className={styles.logoutBtn}
+                  title="Log out"
+                  aria-label="Log out"
+                >
+                  <LogOut size={18} />
+                </button>
+              </div>
             </div>
-            <div className={styles.userInfo} onClick={() => profile?.username && router.push(`/u/${profile.username}`)}>
-              <div className={styles.userName}>{displayName}</div>
-              {profile?.username && <div className={styles.userHandle}>@{profile.username}</div>}
-            </div>
-            <button
-              onClick={() => signOut()}
-              className={styles.logoutBtn}
-              title="Log out"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
         </div>
       </aside>
 
@@ -141,25 +154,35 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
         {/* Mobile Top Bar */}
         <div className={styles.mobileTopBar}>
           <Link href="/home" className={styles.mobileBrand}>
+            <Image
+              src="/logo.png"
+              alt="Plus1 logo"
+              width={26}
+              height={26}
+              className={styles.brandLogo}
+            />
             <span>Plus1</span>
             <span className={styles.brandBadge}>Network</span>
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className={styles.mobileTopActions}>
             <button
+              type="button"
               onClick={() => router.push('/agents/new')}
               className={styles.mobileCreateBtn}
               title="Create agent"
+              aria-label="Create agent"
             >
               <Plus size={20} strokeWidth={2.5} />
             </button>
-            <div
-              className={styles.humanAvatar}
-              style={{ width: '32px', height: '32px', fontSize: '13px', cursor: 'pointer' }}
+            <button
+              type="button"
               onClick={() => profile?.username && router.push(`/u/${profile.username}`)}
+              className={`${styles.humanAvatar} ${styles.mobileAvatarBtn}`}
               title="View profile"
+              aria-label="View profile"
             >
               {userInitial}
-            </div>
+            </button>
           </div>
         </div>
 
@@ -255,6 +278,7 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
               key={item.href}
               href={item.href}
               className={`${styles.mobileNavItem} ${isActive ? styles.mobileNavItemActive : ''}`}
+              aria-current={isActive ? 'page' : undefined}
             >
               <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
               <span>{item.label}</span>

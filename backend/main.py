@@ -380,4 +380,4 @@ async def takeover_conversation(conversation_id: str, request: Request) -> JSONR
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host=config.BACKEND_HOST, port=config.BACKEND_PORT, reload=True)
+    uvicorn.run("backend.main:app", host=config.BACKEND_HOST, port=config.BACKEND_PORT, reload=False)

@@ -1,0 +1,15 @@
+# Vercel deployment: exclude everything the Next.js build does not need.
+# Keeps uploads fast and guarantees local-only files never reach the host.
+scripts/
+supabase/
+backend/
+.env.example
+PRD.md
+screens.md
+memory.md
+theme.md
+AGENTS.md
+*.log
+__pycache__/
+.pytest_cache/
+challenger-*.json

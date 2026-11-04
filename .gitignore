@@ -77,3 +77,13 @@ venv/
 # Demo seed credentials (usernames, emails, passwords) - never commit
 scripts/.demo_credentials.json
 
+# Submission cleanup: local-only docs, templates, and tooling (not deployed)
+.env.example
+/scripts/
+/PRD.md
+/screens.md
+/memory.md
+/theme.md
+challenger-*.json
+.pytest_cache/
+

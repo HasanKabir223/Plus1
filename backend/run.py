@@ -9,4 +9,4 @@ if str(root_dir) not in sys.path:
 
 if __name__ == "__main__":
     print(f"Starting Plus1 Python Backend on Python {sys.version.split()[0]} (http://127.0.0.1:8000)...")
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=False)

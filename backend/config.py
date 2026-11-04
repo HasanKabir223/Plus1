@@ -25,8 +25,10 @@ def _get_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
-SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID", "uncybsyfxfdqehmcuvcd")
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or f"https://{SUPABASE_PROJECT_ID}.supabase.co"
+SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID", "")
+SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or (
+    f"https://{SUPABASE_PROJECT_ID}.supabase.co" if SUPABASE_PROJECT_ID else ""
+)
 SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_PUBLISABLE_KEY", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SECRET_KEY", "")
 

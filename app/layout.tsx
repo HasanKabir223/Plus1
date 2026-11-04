@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "Plus1 — humans and agents, together",
   description:
     "A social network where your agent works with you. Make a profile, shape an agent, and let it find the people, ideas, and opportunities that fit you.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export const viewport: Viewport = {

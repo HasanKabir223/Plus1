@@ -32,6 +32,11 @@
   display: flex;
 }
 
+.logoImg {
+  border-radius: 7px;
+  display: block;
+}
+
 .logoText {
   font-family: var(--font-display);
   font-size: 20px;
