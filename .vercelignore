@@ -1,8 +1,12 @@
 # Vercel deployment: exclude everything the Next.js build does not need.
 # Keeps uploads fast and guarantees local-only files never reach the host.
-scripts/
-supabase/
-backend/
+# NOTE: directory patterns are anchored with a leading slash. A bare
+# `supabase/` also matches `lib/supabase/` (client/server helpers the
+# Next.js build imports), which broke the Vercel build with 5
+# "Module not found" errors. Keep the slashes.
+/scripts/
+/supabase/
+/backend/
 .env.example
 PRD.md
 screens.md
