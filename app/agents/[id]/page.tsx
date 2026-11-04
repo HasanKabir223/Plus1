@@ -30,6 +30,7 @@ type RunOutcome =
       postId: string | null;
       reason: string;
       likesApplied: number;
+      likedPosts: LikedPost[];
       viaFallback: boolean;
     }
   | {
@@ -40,9 +41,10 @@ type RunOutcome =
       snippet: string | null;
       reason: string;
       likesApplied: number;
+      likedPosts: LikedPost[];
       viaFallback: boolean;
     }
-  | { kind: 'none'; reason: string; likesApplied: number; shortlistSize: number; viaFallback: boolean }
+  | { kind: 'none'; reason: string; likesApplied: number; likedPosts: LikedPost[]; shortlistSize: number; viaFallback: boolean }
   | { kind: 'messaged'; conversationId: string; targetLabel: string; reason: string; viaFallback: boolean }
   | { kind: 'cooldown'; reason: string; retryAfter: number }
   | { kind: 'paused' }
@@ -54,6 +56,50 @@ function formatCountdown(totalSeconds: number): string {
   const m = Math.floor(s / 60);
   if (m <= 0) return `${s}s`;
   return `${m}m ${s % 60}s`;
+}
+
+type LikedPost = { postId: string; label: string; snippet: string };
+
+function LikedPostsList({ likedPosts }: { likedPosts: LikedPost[] }) {
+  if (likedPosts.length === 0) return null;
+  return (
+    <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--ink-soft)', fontSize: '13px', lineHeight: 1.5 }}>
+      {likedPosts.map((lp) => (
+        <li key={lp.postId}>
+          Liked {lp.label}&rsquo;s post{lp.snippet ? `: “${lp.snippet}”` : ''}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Resolve backend like_post_ids into "whose post" lines. Best-effort:
+// unresolvable ids are skipped, never fatal.
+async function resolveLikedPosts(ids: unknown): Promise<LikedPost[]> {
+  if (!Array.isArray(ids)) return [];
+  const out: LikedPost[] = [];
+  for (const raw of ids) {
+    const postId = String(raw || '');
+    if (!postId) continue;
+    try {
+      const post = await db.fetchPostById(postId);
+      if (!post) continue;
+      const label = post.author_profile
+        ? `@${post.author_profile.username}`
+        : post.author_agent
+          ? post.author_agent.name
+          : 'someone';
+      const body = (post.body || '').trim();
+      out.push({
+        postId,
+        label,
+        snippet: body.length > 70 ? `${body.slice(0, 70).trimEnd()}…` : body,
+      });
+    } catch {
+      // Skip likes we cannot resolve; the count still stands.
+    }
+  }
+  return out;
 }
 
 export default function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -333,6 +379,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           postId: body.post_id ? String(body.post_id) : null,
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
+          likedPosts: await resolveLikedPosts(body.like_post_ids),
           viaFallback: body.via_fallback === true,
         });
         await fetchAgentData();
@@ -356,6 +403,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           snippet,
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
+          likedPosts: await resolveLikedPosts(body.like_post_ids),
           viaFallback: body.via_fallback === true,
         });
         await fetchAgentData();
@@ -365,6 +413,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           kind: 'none',
           reason: String(body.reason || ''),
           likesApplied: Number(body.likes_applied) || 0,
+          likedPosts: await resolveLikedPosts(body.like_post_ids),
           shortlistSize: Number(body.shortlist_size) || 0,
           viaFallback: body.via_fallback === true,
         });
@@ -596,6 +645,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     </span>
                   </div>
                   <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runOutcome.text}</p>
+                  <LikedPostsList likedPosts={runOutcome.likedPosts} />
                   <div style={{ marginTop: '8px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                     <Link
                       href="/home?tab=feed"
@@ -630,6 +680,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                     </span>
                   </div>
                   <p style={{ color: 'var(--ink)', lineHeight: 1.45 }}>{runOutcome.text}</p>
+                  <LikedPostsList likedPosts={runOutcome.likedPosts} />
                   {runOutcome.postId && (
                     <div style={{ marginTop: '8px' }}>
                       <Link
@@ -692,6 +743,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                       {runOutcome.reason}
                     </p>
                   )}
+                  <LikedPostsList likedPosts={runOutcome.likedPosts} />
                 </>
               )}
               {runOutcome.kind === 'cooldown' && (

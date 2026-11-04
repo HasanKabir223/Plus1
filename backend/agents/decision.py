@@ -345,6 +345,10 @@ def validate_decision(
     action = parsed.get("action")
     if action == "reply":  # backward-compat alias for "comment"
         action = "comment"
+    if action is None:
+        # Models sometimes emit "action": null to mean "do nothing";
+        # treat it as "none" (likes still apply) instead of an error.
+        action = "none"
     if action not in ("post", "comment", "answer", "message", "none"):
         raise InvalidModelOutput(f"unknown action: {action!r}")
 

@@ -536,30 +536,34 @@ async def _advance_locked(
 
     # Spend one claimed call. 'turn' skips the Run cooldown only; per-agent
     # daily cap, global call cap and global token cap still apply.
-    claim_res = db.rpc(
-        "claim_agent_call",
-        {
-            "p_agent_id": responder_agent_id,
-            "p_cooldown_seconds": config.AGENT_COOLDOWN_SECONDS,
-            "p_agent_daily_cap": config.AGENT_DAILY_CAP,
-            "p_global_daily_cap": config.GLOBAL_DAILY_CALL_CAP,
-            "p_global_daily_token_cap": config.GLOBAL_DAILY_TOKEN_CAP,
-            "p_kind": "turn",
-        },
-    ).execute()
-    claim_rows = claim_res.data
-    claim = claim_rows[0] if isinstance(claim_rows, list) and claim_rows else claim_rows
-    if not isinstance(claim, dict) or not claim.get("ok"):
-        reason = str((claim or {}).get("reason") or "claim_denied")
-        _write_action_log(
-            db,
-            agent_id=responder_agent_id,
-            action="turn",
-            status="skipped",
-            reason=reason,
-            conversation_id=conversation_id,
-        )
-        return f"claim_denied:{reason}"
+    # DEMO_NO_DAILY_CAPS skips the claim entirely for demos.
+    if config.DEMO_NO_DAILY_CAPS:
+        logger.warning("turn gate bypassed agent=%s (DEMO_NO_DAILY_CAPS)", responder_agent_id)
+    else:
+        claim_res = db.rpc(
+            "claim_agent_call",
+            {
+                "p_agent_id": responder_agent_id,
+                "p_cooldown_seconds": config.AGENT_COOLDOWN_SECONDS,
+                "p_agent_daily_cap": config.AGENT_DAILY_CAP,
+                "p_global_daily_cap": config.GLOBAL_DAILY_CALL_CAP,
+                "p_global_daily_token_cap": config.GLOBAL_DAILY_TOKEN_CAP,
+                "p_kind": "turn",
+            },
+        ).execute()
+        claim_rows = claim_res.data
+        claim = claim_rows[0] if isinstance(claim_rows, list) and claim_rows else claim_rows
+        if not isinstance(claim, dict) or not claim.get("ok"):
+            reason = str((claim or {}).get("reason") or "claim_denied")
+            _write_action_log(
+                db,
+                agent_id=responder_agent_id,
+                action="turn",
+                status="skipped",
+                reason=reason,
+                conversation_id=conversation_id,
+            )
+            return f"claim_denied:{reason}"
 
     ctx = _build_turn_context(db, conv, responder_agent_id, participants, messages)
     turn_messages = build_turn_messages(ctx)

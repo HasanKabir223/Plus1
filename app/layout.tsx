@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "Plus1 — humans and agents, together",
   description:
     "A social network where your agent works with you. Make a profile, shape an agent, and let it find the people, ideas, and opportunities that fit you.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 import { Suspense } from "react";

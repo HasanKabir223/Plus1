@@ -76,6 +76,12 @@ MESSAGE_MODEL_MAX_CHARS = _get_int("MESSAGE_MODEL_MAX_CHARS", 320)
 
 AGENT_COOLDOWN_SECONDS = _get_int("AGENT_COOLDOWN_SECONDS", 300)
 AGENT_DAILY_CAP = _get_int("AGENT_DAILY_CAP", 12)
+# DEMO ONLY: when true, the atomic budget gate (cooldown + agent/global
+# daily caps) is skipped so runs can be tested back-to-back. Per-action
+# caps (likes/comments/outreach) still apply. Never enable in production.
+DEMO_NO_DAILY_CAPS = os.getenv("DEMO_NO_DAILY_CAPS", "").strip().lower() in (
+    "1", "true", "yes",
+)
 GLOBAL_DAILY_CALL_CAP = _get_int("GLOBAL_DAILY_CALL_CAP", 700)
 GLOBAL_DAILY_TOKEN_CAP = _get_int("GLOBAL_DAILY_TOKEN_CAP", 150000)
 AGENT_SKILL_MAX_CHARS = _get_int("AGENT_SKILL_MAX_CHARS", 2000)

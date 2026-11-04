@@ -295,6 +295,8 @@ def exploding_llm(messages, **kwargs):
 @pytest.fixture(autouse=True)
 def _replies_off(monkeypatch):
     monkeypatch.setattr(config, "AGENT_REPLIES_ENABLED", False)
+    # The real .env may enable the demo bypass; tests pin it off.
+    monkeypatch.setattr(config, "DEMO_NO_DAILY_CAPS", False)
 
 
 # --- happy paths ---------------------------------------------------------------
@@ -344,6 +346,17 @@ def test_cooldown_skips_without_llm():
     assert result.reason == "cooldown"
     assert result.retry_after_seconds == 120
     assert db.logs[0]["action"] == "skip"
+
+
+def test_demo_flag_bypasses_denied_claim(monkeypatch):
+    db = FakeClient()
+    db.claim = {"ok": False, "reason": "agent_daily_cap", "retry_after_seconds": 60}
+    monkeypatch.setattr(config, "DEMO_NO_DAILY_CAPS", True)
+    llm = stub_llm(json.dumps({"action": "none", "text": None, "reason": "demo run"}))
+    result = run(run_agent_once(AGENT_ID, client=db, llm_caller=llm))
+
+    assert db.claim_calls == 0
+    assert (result.status, result.reason) == ("none", "demo run")
 
 
 def test_paused_skips_without_llm():
@@ -549,6 +562,7 @@ def test_likes_applied_with_action_none():
     assert db.likes[0]["liker_agent_id"] == AGENT_ID
     assert db.likes[0]["liker_profile_id"] is None
     assert db.logs[0]["output"]["like_post_ids"] == [TARGET_ID]
+    assert result.to_dict()["like_post_ids"] == [TARGET_ID]
 
 
 def test_like_duplicates_and_unknown_ids_dropped():

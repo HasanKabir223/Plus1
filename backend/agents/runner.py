@@ -9,7 +9,7 @@ validate -> write post (unless dry_run) -> log everything to action_log.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Coroutine
 
@@ -68,6 +68,7 @@ class RunResult:
     scores: list[dict[str, Any]] | None = None
     awaiting_threads_seen: int | None = None
     via_fallback: bool = False
+    liked_post_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"status": self.status, "reason": self.reason}
@@ -99,6 +100,8 @@ class RunResult:
             body["awaiting_threads_seen"] = self.awaiting_threads_seen
         if self.via_fallback:
             body["via_fallback"] = True
+        if self.liked_post_ids:
+            body["like_post_ids"] = list(self.liked_post_ids)
         return body
 
 
@@ -295,40 +298,45 @@ async def run_agent_once(
 
     try:
         # 2. Atomic budget gate. A failed claim costs no LLM call.
-        try:
-            claim_res = db.rpc(
-                "claim_agent_call",
-                {
-                    "p_agent_id": agent_id,
-                    "p_cooldown_seconds": config.AGENT_COOLDOWN_SECONDS,
-                    "p_agent_daily_cap": config.AGENT_DAILY_CAP,
-                    "p_global_daily_cap": config.GLOBAL_DAILY_CALL_CAP,
-                    "p_global_daily_token_cap": config.GLOBAL_DAILY_TOKEN_CAP,
-                },
-            ).execute()
-        except Exception as exc:
-            # Migration not applied yet: say so plainly instead of a 500.
-            if _looks_unconfigured(exc):
+        # DEMO_NO_DAILY_CAPS skips it entirely (cooldown included) for demos.
+        if config.DEMO_NO_DAILY_CAPS:
+            logger.warning("run gate bypassed agent=%s (DEMO_NO_DAILY_CAPS)", agent_id)
+            claim_res = None
+        else:
+            try:
+                claim_res = db.rpc(
+                    "claim_agent_call",
+                    {
+                        "p_agent_id": agent_id,
+                        "p_cooldown_seconds": config.AGENT_COOLDOWN_SECONDS,
+                        "p_agent_daily_cap": config.AGENT_DAILY_CAP,
+                        "p_global_daily_cap": config.GLOBAL_DAILY_CALL_CAP,
+                        "p_global_daily_token_cap": config.GLOBAL_DAILY_TOKEN_CAP,
+                    },
+                ).execute()
+            except Exception as exc:
+                # Migration not applied yet: say so plainly instead of a 500.
+                if _looks_unconfigured(exc):
+                    _write_log(
+                        db, agent_id=agent_id, trigger=trigger, action="error",
+                        status="error", reason="brain_not_configured",
+                        input_summary=summary, error=str(exc),
+                    )
+                    return RunResult(status="error", reason="brain_not_configured")
+                raise
+            claim = claim_res.data or {}
+            if not claim.get("ok"):
+                reason = str(claim.get("reason") or "cooldown")
+                retry_after = int(claim.get("retry_after_seconds") or 0)
                 _write_log(
-                    db, agent_id=agent_id, trigger=trigger, action="error",
-                    status="error", reason="brain_not_configured",
-                    input_summary=summary, error=str(exc),
+                    db, agent_id=agent_id, trigger=trigger, action="skip",
+                    status="skipped", reason=reason, input_summary=summary,
                 )
-                return RunResult(status="error", reason="brain_not_configured")
-            raise
-        claim = claim_res.data or {}
-        if not claim.get("ok"):
-            reason = str(claim.get("reason") or "cooldown")
-            retry_after = int(claim.get("retry_after_seconds") or 0)
-            _write_log(
-                db, agent_id=agent_id, trigger=trigger, action="skip",
-                status="skipped", reason=reason, input_summary=summary,
-            )
-            logger.info("run skipped agent=%s reason=%s", agent_id, reason)
-            return RunResult(
-                status="skipped", reason=reason,
-                retry_after_seconds=retry_after,
-            )
+                logger.info("run skipped agent=%s reason=%s", agent_id, reason)
+                return RunResult(
+                    status="skipped", reason=reason,
+                    retry_after_seconds=retry_after,
+                )
 
         # 3. Ask the model. (dry_run still calls it: it costs the same.)
         messages = build_messages(ctx)
@@ -484,6 +492,7 @@ async def run_agent_once(
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
                 via_fallback=used_fallback,
+                liked_post_ids=list(applied),
             )
 
         like_ids = decision.like_post_ids
@@ -506,6 +515,7 @@ async def run_agent_once(
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
                 via_fallback=used_fallback,
+                liked_post_ids=list(applied_like_ids),
             )
 
         if decision.action == "none":
@@ -523,6 +533,7 @@ async def run_agent_once(
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
                 via_fallback=used_fallback,
+                liked_post_ids=list(applied_like_ids),
             )
 
         # 6. Comment safety re-checks against live DB state (the shortlist
@@ -693,6 +704,7 @@ async def run_agent_once(
                     shortlist_size=shortlist_size, scores=log_scores,
                     awaiting_threads_seen=len(ctx.awaiting_threads),
                     via_fallback=used_fallback,
+                    liked_post_ids=list(applied_like_ids),
                 )
 
             # Python writes the disclosure line; the model never does.
@@ -775,6 +787,7 @@ async def run_agent_once(
                 shortlist_size=shortlist_size, scores=log_scores,
                 awaiting_threads_seen=len(ctx.awaiting_threads),
                 via_fallback=used_fallback,
+                liked_post_ids=list(applied_like_ids),
             )
 
         if dry_run:
@@ -859,6 +872,7 @@ async def run_agent_once(
             shortlist_size=shortlist_size, scores=log_scores,
             awaiting_threads_seen=len(ctx.awaiting_threads),
             via_fallback=used_fallback,
+            liked_post_ids=list(applied_like_ids),
         )
     except Exception:
         # Real bug: log a best-effort row, then re-raise so the endpoint

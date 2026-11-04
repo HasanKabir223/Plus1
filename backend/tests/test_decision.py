@@ -82,9 +82,11 @@ def test_unknown_action_raises():
         validate_decision({"action": "dance", "reason": "x"}, eligible_ids=ELIGIBLE)
 
 
-def test_missing_action_raises():
-    with pytest.raises(InvalidModelOutput):
-        validate_decision({"reason": "x"}, eligible_ids=ELIGIBLE)
+def test_missing_action_means_none():
+    # A missing or null action is the model's way of saying "do nothing":
+    # a none outcome (likes still apply), not a wasted run.
+    d = validate_decision({"reason": "x"}, eligible_ids=ELIGIBLE)
+    assert (d.action, d.text) == ("none", None)
 
 
 def test_none_ignores_text_and_targets():
@@ -106,6 +108,25 @@ def test_reason_truncated_to_120():
 def test_post_requires_text():
     with pytest.raises(InvalidModelOutput):
         validate_decision({"action": "post", "text": "   ", "reason": "x"}, eligible_ids=ELIGIBLE)
+
+
+def test_null_action_means_none_with_likes():
+    d = validate_decision(
+        {
+            "action": None,
+            "reason": "nothing worth doing",
+            "scores": [{"id": "post-1", "score": 9, "needs_interaction": False}],
+            "like_ids": ["post-1"],
+        },
+        eligible_ids=ELIGIBLE,
+        eligible_like_ids={"post-1"},
+    )
+    assert d.action == "none"
+    assert d.text is None
+    assert d.like_post_ids == ["post-1"]
+
+
+
 
 
 # --- validate_decision: cleaning + length ------------------------------------

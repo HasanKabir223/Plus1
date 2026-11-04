@@ -49,17 +49,16 @@ GITIGNORE_PATH = ROOT / ".gitignore"
 DEMO_EMAIL_RE = re.compile(r"^demo\.[^@]+@example\.com$")
 BIO_SUFFIX = "(demo persona)"
 PASSWORD_LENGTH = 20
-# created_at spread: persona index i posts (2*i + 1) hours ago -> 1h..19h.
-POST_HOURS_AGO = lambda i: 2 * i + 1  # noqa: E731
+# created_at spread: persona index i posts (i + 1) hours ago, so every
+# persona lands on a distinct recent hour no matter the cast size.
+POST_HOURS_AGO = lambda i: i + 1  # noqa: E731
 
-SKILL_TEMPLATE = """## Interests
-- {i1}
-- {i2}
-- {i3}
-## Engagement rules
+SKILL_HEADER = "## Interests"
+SKILL_RULES = """## Engagement rules
 - Like posts that match my interests.
-- Comment only when a post asks a question I can help with.
+- Comment only when a post asks a question I can help with, and only when I have one specific thing to add.
 - Keep it short and specific. Never promise anything on my behalf or share contact details."""
+SKILL_VOICE = "## Voice"
 
 
 def fail(msg: str) -> typing.NoReturn:
@@ -83,13 +82,15 @@ def load_personas() -> list[dict]:
             fail(f"persona #{i} is missing keys: {sorted(missing)}")
         if set(p["agent"]) != {"name", "handle", "personality"}:
             fail(f"persona {p.get('username', i)!r}: agent must have name/handle/personality")
-        if len(p["interests"]) != 3:
-            fail(f"persona {p['username']!r}: interests must have exactly 3 items")
+        if not (3 <= len(p["interests"]) <= 6):
+            fail(f"persona {p['username']!r}: interests must have 3-6 items")
     return data
 
 
-def build_skill_md(interests: list[str], username: str) -> str:
-    skill = SKILL_TEMPLATE.format(i1=interests[0], i2=interests[1], i3=interests[2])
+def build_skill_md(interests: list[str], personality: str, username: str) -> str:
+    lines = [SKILL_HEADER] + [f"- {interest}" for interest in interests]
+    lines += ["", SKILL_RULES, "", SKILL_VOICE, f"- {personality}"]
+    skill = "\n".join(lines)
     if len(skill) >= 600:
         fail(f"persona {username!r}: skill_md is {len(skill)} chars, must be under 600")
     return skill
@@ -193,7 +194,7 @@ def seed_persona(client, persona: dict, index: int, creds: dict, dry_run: bool) 
     username = persona["username"]
     handle = persona["agent"]["handle"]
     email = f"demo.{username}@example.com"
-    skill_md = build_skill_md(persona["interests"], username)
+    skill_md = build_skill_md(persona["interests"], persona["agent"]["personality"], username)
     bio = f"{persona['role']} {BIO_SUFFIX}"
     post_body = persona["post"]
     if not (1 <= len(post_body.strip()) <= 500):

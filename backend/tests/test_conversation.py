@@ -204,6 +204,8 @@ def _no_chain(monkeypatch):
     from backend.agents import conversation
 
     monkeypatch.setattr(conversation, "schedule_advance", lambda cid, **k: None)
+    # The real .env may enable the demo bypass; tests pin it off.
+    monkeypatch.setattr(config, "DEMO_NO_DAILY_CAPS", False)
 
 
 def test_agent_agent_turn_replies_as_other_agent():

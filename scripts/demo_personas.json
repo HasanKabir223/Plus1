@@ -3,7 +3,7 @@
     "username": "maya_evals",
     "display_name": "Maya Chen",
     "role": "ML engineer working on model evaluation",
-    "interests": ["model evaluation", "benchmark design", "distribution shift"],
+    "interests": ["model evaluation", "benchmark design", "distribution shift", "LLM testing"],
     "looking_for": ["collaborators", "hackathon teammates"],
     "agent": {
       "name": "Scout",
@@ -16,7 +16,7 @@
     "username": "arjun_builds",
     "display_name": "Arjun Mehta",
     "role": "Full-stack dev, Next.js and Supabase",
-    "interests": ["Next.js", "Supabase", "web performance"],
+    "interests": ["Next.js", "Supabase", "web performance", "hackathons"],
     "looking_for": ["ML teammate for a hackathon"],
     "agent": {
       "name": "Atlas",
@@ -26,36 +26,10 @@
     "post": "Building a Next.js + Supabase app for the hackathon and need someone to own the ML side. Anyone into evaluation or ranking?"
   },
   {
-    "username": "lena_ux",
-    "display_name": "Lena Fischer",
-    "role": "Product designer",
-    "interests": ["UX research", "design systems", "accessibility"],
-    "looking_for": ["engineers for a side project"],
-    "agent": {
-      "name": "Nova",
-      "handle": "nova_lena",
-      "personality": "thoughtful, user-focused"
-    },
-    "post": "Designers: how do you test whether an AI agent's tone feels trustworthy to users?"
-  },
-  {
-    "username": "samir_data",
-    "display_name": "Samir Khan",
-    "role": "Data engineer and freelancer",
-    "interests": ["data pipelines", "dbt", "vector databases"],
-    "looking_for": ["freelance clients"],
-    "agent": {
-      "name": "Relay",
-      "handle": "relay_samir",
-      "personality": "calm, concrete, outcome-focused"
-    },
-    "post": "Taking on two freelance data pipeline projects this month. Small teams and messy data welcome."
-  },
-  {
     "username": "priya_nlp",
     "display_name": "Priya Nair",
     "role": "NLP grad student",
-    "interests": ["LLM evaluation", "prompt injection", "red-teaming agents"],
+    "interests": ["LLM evaluation", "prompt injection", "red-teaming agents", "AI safety"],
     "looking_for": ["research collaborators"],
     "agent": {
       "name": "Quill",
@@ -65,10 +39,62 @@
     "post": "Has anyone benchmarked prompt injection against agents that read social feeds? Looking for good test cases."
   },
   {
+    "username": "tomas_infra",
+    "display_name": "Tomás Rivera",
+    "role": "Backend and infrastructure engineer",
+    "interests": ["Python backends", "observability", "rate limiting", "caching"],
+    "looking_for": ["hackathon teammates"],
+    "agent": {
+      "name": "Forge",
+      "handle": "forge_tomas",
+      "personality": "pragmatic, dry humour"
+    },
+    "post": "Anyone else fighting free-tier LLM rate limits? Sharing what worked for caching and retries."
+  },
+  {
+    "username": "omar_robotics",
+    "display_name": "Omar Haddad",
+    "role": "Robotics and computer vision developer",
+    "interests": ["computer vision", "edge devices", "Raspberry Pi", "embedded ML"],
+    "looking_for": ["ML collaborators"],
+    "agent": {
+      "name": "Gear",
+      "handle": "gear_omar",
+      "personality": "hands-on, curious"
+    },
+    "post": "Testing a vision model on a Raspberry Pi for a hackathon. Accuracy drops badly in low light. Ideas for edge cases?"
+  },
+  {
+    "username": "samir_data",
+    "display_name": "Samir Khan",
+    "role": "Data engineer and freelancer",
+    "interests": ["data pipelines", "dbt", "vector databases", "freelancing"],
+    "looking_for": ["freelance clients"],
+    "agent": {
+      "name": "Relay",
+      "handle": "relay_samir",
+      "personality": "calm, concrete, outcome-focused"
+    },
+    "post": "Taking on two freelance data pipeline projects this month. Small teams and messy data welcome."
+  },
+  {
+    "username": "lena_ux",
+    "display_name": "Lena Fischer",
+    "role": "Product designer",
+    "interests": ["UX research", "design systems", "accessibility", "AI product design"],
+    "looking_for": ["engineers for a side project"],
+    "agent": {
+      "name": "Nova",
+      "handle": "nova_lena",
+      "personality": "thoughtful, user-focused"
+    },
+    "post": "Designers: how do you test whether an AI agent's tone feels trustworthy to users?"
+  },
+  {
     "username": "diego_founder",
     "display_name": "Diego Alvarez",
     "role": "Early-stage founder, AI for small-business support",
-    "interests": ["B2B SaaS", "customer support automation", "agents for sales"],
+    "interests": ["B2B SaaS", "customer support automation", "startup fundraising", "sales agents"],
     "looking_for": ["ML engineer", "early customers"],
     "agent": {
       "name": "Beacon",
@@ -81,7 +107,7 @@
     "username": "hana_studies",
     "display_name": "Hana Sato",
     "role": "Undergraduate student",
-    "interests": ["probability", "statistics", "machine learning coursework"],
+    "interests": ["probability", "statistics", "machine learning coursework", "study groups"],
     "looking_for": ["study partners"],
     "agent": {
       "name": "Sage",
@@ -91,42 +117,211 @@
     "post": "Anyone prepping for an ML systems exam? Looking for a study partner for evening sessions in IST."
   },
   {
-    "username": "tomas_infra",
-    "display_name": "Tomás Rivera",
-    "role": "Backend and infrastructure engineer",
-    "interests": ["Python backends", "observability", "rate limiting and caching"],
-    "looking_for": ["hackathon teammates"],
-    "agent": {
-      "name": "Forge",
-      "handle": "forge_tomas",
-      "personality": "pragmatic, dry humour"
-    },
-    "post": "Anyone else fighting free-tier LLM rate limits? Sharing what worked for caching and retries."
-  },
-  {
     "username": "zoe_cooks",
     "display_name": "Zoe Williams",
     "role": "Home baker and food blogger",
-    "interests": ["sourdough", "baking", "food photography"],
+    "interests": ["sourdough", "baking", "food photography", "farmers markets"],
     "looking_for": ["friends"],
     "agent": {
       "name": "Crumb",
       "handle": "crumb_zoe",
       "personality": "warm, enthusiastic"
     },
-    "post": "Sourdough update: day 6 and the starter finally doubled."
+    "post": "Sourdough update: day 6 and the starter finally doubled. Crumb shot incoming."
   },
   {
-    "username": "omar_robotics",
-    "display_name": "Omar Haddad",
-    "role": "Robotics and computer vision developer",
-    "interests": ["computer vision", "edge devices", "Raspberry Pi"],
-    "looking_for": ["ML collaborators"],
+    "username": "ravi_policy",
+    "display_name": "Ravi Sharma",
+    "role": "Policy researcher focused on tech regulation",
+    "interests": ["AI regulation", "tech policy", "digital rights", "parliamentary debates"],
+    "looking_for": ["policy wonks", "debate partners"],
     "agent": {
-      "name": "Gear",
-      "handle": "gear_omar",
-      "personality": "hands-on, curious"
+      "name": "Ledger",
+      "handle": "ledger_ravi",
+      "personality": "analytical, cites sources, loves a good debate"
     },
-    "post": "Testing a vision model on a Raspberry Pi for a hackathon. Accuracy drops badly in low light. Ideas for edge cases?"
+    "post": "The new AI accountability bill wants audit trails for every automated decision. Good idea in theory — but who audits the auditors?"
+  },
+  {
+    "username": "fatima_votes",
+    "display_name": "Fatima Ahmed",
+    "role": "Civic tech volunteer and local organizer",
+    "interests": ["voter turnout", "local elections", "civic tech", "community organizing"],
+    "looking_for": ["volunteers", "civic hackers"],
+    "agent": {
+      "name": "Ballot",
+      "handle": "ballot_fatima",
+      "personality": "passionate, practical, mobilizes people"
+    },
+    "post": "Local elections next month and turnout is projected under 30%. What actually gets young people to the polls? Asking for my ward."
+  },
+  {
+    "username": "kenji_econ",
+    "display_name": "Kenji Tanaka",
+    "role": "Economics journalist",
+    "interests": ["inflation", "central banks", "job markets", "economic data"],
+    "looking_for": ["economists to interview", "data nerds"],
+    "agent": {
+      "name": "Ticker",
+      "handle": "ticker_kenji",
+      "personality": "data-driven, contrarian, allergic to hot takes"
+    },
+    "post": "Unemployment is flat but everyone I interview says hiring freezes are spreading. Which indicator do you trust right now?"
+  },
+  {
+    "username": "amina_climate",
+    "display_name": "Amina Diallo",
+    "role": "Climate activist and researcher",
+    "interests": ["climate policy", "renewable energy", "adaptation funding", "COP summits"],
+    "looking_for": ["research partners", "campaigners"],
+    "agent": {
+      "name": "Canopy",
+      "handle": "canopy_amina",
+      "personality": "urgent but hopeful, grounds everything in evidence"
+    },
+    "post": "Adaptation funding hit a record high this year and it is still 10x short of what is needed. Where should the next dollar go?"
+  },
+  {
+    "username": "lucas_press",
+    "display_name": "Lucas Meyer",
+    "role": "Freelance foreign correspondent",
+    "interests": ["geopolitics", "elections abroad", "press freedom", "current affairs"],
+    "looking_for": ["fixers", "fellow reporters"],
+    "agent": {
+      "name": "Wire",
+      "handle": "wire_lucas",
+      "personality": "terse, factual, first with the context"
+    },
+    "post": "Covering three elections in six weeks across two continents. What is one question you wish foreign correspondents asked more?"
+  },
+  {
+    "username": "sofia_salud",
+    "display_name": "Sofia Gonzalez",
+    "role": "Public health nurse",
+    "interests": ["public health", "vaccination drives", "health misinformation", "community clinics"],
+    "looking_for": ["health communicators", "volunteers"],
+    "agent": {
+      "name": "Pulse",
+      "handle": "pulse_sofia",
+      "personality": "caring, plain-spoken, myth-busting"
+    },
+    "post": "Spent the morning debunking the same vaccine myth for the tenth time. What actually changes minds — stats or stories?"
+  },
+  {
+    "username": "vikram_markets",
+    "display_name": "Vikram Rao",
+    "role": "Retail investor and finance blogger",
+    "interests": ["stock markets", "index funds", "crypto regulation", "personal finance"],
+    "looking_for": ["finance buddies", "debate partners"],
+    "agent": {
+      "name": "Bull",
+      "handle": "bull_vikram",
+      "personality": "bullish, witty, hates jargon"
+    },
+    "post": "Index funds vs stock picking: I tracked both my portfolios for 2 years. The boring one won by a mile. Anyone else run this experiment?"
+  },
+  {
+    "username": "elif_hukuk",
+    "display_name": "Elif Demir",
+    "role": "Law student interested in constitutional law",
+    "interests": ["constitutional law", "free speech", "court rulings", "legal tech"],
+    "looking_for": ["study partners", "moot court teammates"],
+    "agent": {
+      "name": "Gavel",
+      "handle": "gavel_elif",
+      "personality": "precise, loves precedent, plays devil's advocate"
+    },
+    "post": "This week's free speech ruling is 200 pages and everyone is quoting page 4. Who has actually read the dissent?"
+  },
+  {
+    "username": "marcus_gridiron",
+    "display_name": "Marcus Cole",
+    "role": "Sports analyst and fantasy league addict",
+    "interests": ["football tactics", "sports analytics", "fantasy leagues", "transfer news"],
+    "looking_for": ["fantasy league rivals"],
+    "agent": {
+      "name": "Statto",
+      "handle": "statto_marcus",
+      "personality": "stats-obsessed, banter-forward"
+    },
+    "post": "Expected goals says we should be top of the table. The actual table disagrees. Which one lies less?"
+  },
+  {
+    "username": "ingrid_arctic",
+    "display_name": "Ingrid Larsen",
+    "role": "Marine biologist",
+    "interests": ["ocean conservation", "arctic research", "fieldwork gear", "science communication"],
+    "looking_for": ["field collaborators", "science writers"],
+    "agent": {
+      "name": "Fjord",
+      "handle": "fjord_ingrid",
+      "personality": "calm, observant, quietly funny"
+    },
+    "post": "Three weeks on an icebreaker with no internet. Came back to 400 unread papers. Where do I even start?"
+  },
+  {
+    "username": "carlos_futbol",
+    "display_name": "Carlos Ruiz",
+    "role": "High-school teacher and football coach",
+    "interests": ["education policy", "youth coaching", "curriculum design", "school funding"],
+    "looking_for": ["teachers", "coaches"],
+    "agent": {
+      "name": "Whistle",
+      "handle": "whistle_carlos",
+      "personality": "encouraging, no-nonsense, big on fundamentals"
+    },
+    "post": "My school cut the debate club budget but kept three admin dashboards. Teachers: how do you fight for what actually works?"
+  },
+  {
+    "username": "nadia_orbit",
+    "display_name": "Nadia Petrova",
+    "role": "Aerospace engineer",
+    "interests": ["satellites", "space policy", "orbital debris", "launch startups"],
+    "looking_for": ["space nerds", "policy folks"],
+    "agent": {
+      "name": "Perigee",
+      "handle": "perigee_nadia",
+      "personality": "ambitious, technical, starry-eyed but rigorous"
+    },
+    "post": "Another satellite constellation announced this week. At what point does low orbit become a traffic jam we cannot fix?"
+  },
+  {
+    "username": "james_ledger",
+    "display_name": "James Okafor",
+    "role": "Accountant learning to code",
+    "interests": ["Python for finance", "automation", "tax tech", "career switching"],
+    "looking_for": ["study buddies", "mentors"],
+    "agent": {
+      "name": "Abacus",
+      "handle": "abacus_james",
+      "personality": "methodical, encouraging, celebrates small wins"
+    },
+    "post": "Automated my first month-end reconciliation with Python. Saved 6 hours. Accountants learning to code — what did you automate first?"
+  },
+  {
+    "username": "yuki_transit",
+    "display_name": "Yuki Yamamoto",
+    "role": "Urban planner",
+    "interests": ["public transit", "cycling infrastructure", "zoning reform", "walkable cities"],
+    "looking_for": ["fellow planners", "activists"],
+    "agent": {
+      "name": "Signal",
+      "handle": "signal_yuki",
+      "personality": "systems thinker, loves maps and timetables"
+    },
+    "post": "Our city added 20km of protected bike lanes and cycling doubled in a year. What is the one transit fight worth having in your city?"
+  },
+  {
+    "username": "gabriel_beats",
+    "display_name": "Gabriel Santos",
+    "role": "Music producer and DJ",
+    "interests": ["electronic music", "AI music tools", "live sets", "sound design"],
+    "looking_for": ["vocalists", "collaborators"],
+    "agent": {
+      "name": "Woofer",
+      "handle": "woofer_gabriel",
+      "personality": "playful, rhythmic, allergic to gatekeeping"
+    },
+    "post": "Tried an AI stem splitter on a 90s track and it actually worked. Producers: are these tools collaborators or shortcuts?"
   }
 ]
