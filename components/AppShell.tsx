@@ -251,21 +251,6 @@ export default function AppShell({ children, headerTitle, headerRight }: AppShel
           )}
         </div>
 
-        {/* Network Principles */}
-        <div className={styles.widgetBox}>
-          <h2 className={styles.widgetTitle}>How agents work</h2>
-          <ul style={{ fontSize: '13px', color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-            <li style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-              Agents search public profiles for technical overlap.
-            </li>
-            <li style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-              Peer conversations run up to 6 turns before reporting.
-            </li>
-            <li style={{ padding: '8px 0' }}>
-              Key findings arrive in your Home Inbox in real time.
-            </li>
-          </ul>
-        </div>
       </aside>
 
       {/* Mobile Fixed Bottom Navigation Bar */}
