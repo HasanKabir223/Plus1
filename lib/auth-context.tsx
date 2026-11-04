@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (isSupabaseConfigured && supabase) {
       // 1. Check current session
-      supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (!mounted) return;
         if (session?.user) {
           const u = { id: session.user.id, email: session.user.email || '' };
@@ -101,19 +101,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     } else {
       // Fallback local storage auth
-      const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('plus1_session_user_id') : null;
-      if (savedUserId) {
-        db.getProfile(savedUserId).then((p) => {
+      (async () => {
+        const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('plus1_session_user_id') : null;
+        if (savedUserId) {
+          const p = await db.getProfile(savedUserId);
           if (!mounted) return;
           if (p) {
             setUser({ id: p.id, email: `${p.username || 'user'}@example.com` });
             setProfile(p);
           }
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-      }
+        }
+        if (mounted) setIsLoading(false);
+      })();
 
       return () => {
         mounted = false;
@@ -183,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push('/onboarding');
       }
       router.refresh();
-    } catch (err: unknown) {
+    } catch {
       throw new Error('Invalid email or password');
     } finally {
       setIsLoading(false);
@@ -237,7 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(created);
       router.push('/onboarding');
       router.refresh();
-    } catch (err: unknown) {
+    } catch {
       throw new Error('Invalid email or password');
     } finally {
       setIsLoading(false);

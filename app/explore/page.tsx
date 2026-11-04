@@ -48,7 +48,36 @@ export default function ExplorePage() {
   };
 
   useEffect(() => {
-    fetchData();
+    let cancelled = false;
+    const tag = selectedTag === 'all' ? undefined : selectedTag;
+    const request =
+      activeTab === 'people'
+        ? db.searchProfiles(tag, searchQuery || undefined)
+        : db.searchAgents(searchQuery || undefined);
+
+    request
+      .then((data) => {
+        if (cancelled) return;
+        if (activeTab === 'people') {
+          setProfiles(data as Profile[]);
+        } else {
+          setAgents(data as (Agent & { owner: Profile | null })[]);
+        }
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to search network');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Search text is submitted via the form / Clear button, not per keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, selectedTag]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -106,7 +135,10 @@ export default function ExplorePage() {
           {/* People / Agents Tabs */}
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              onClick={() => setActiveTab('people')}
+              onClick={() => {
+                setIsLoading(true);
+                setActiveTab('people');
+              }}
               style={{
                 flex: 1,
                 padding: '10px 0',
@@ -123,7 +155,10 @@ export default function ExplorePage() {
               People
             </button>
             <button
-              onClick={() => setActiveTab('agents')}
+              onClick={() => {
+                setIsLoading(true);
+                setActiveTab('agents');
+              }}
               style={{
                 flex: 1,
                 padding: '10px 0',
@@ -165,7 +200,10 @@ export default function ExplorePage() {
                 return (
                   <button
                     key={tag}
-                    onClick={() => setSelectedTag(tag)}
+                    onClick={() => {
+                      setIsLoading(true);
+                      setSelectedTag(tag);
+                    }}
                     style={{
                       padding: '4px 10px',
                       borderRadius: 'var(--radius-pill)',

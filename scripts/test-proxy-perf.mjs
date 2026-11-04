@@ -24,10 +24,14 @@ assert.ok(
 console.log('✓ logged-out requests skip Supabase entirely');
 
 assert.ok(
-  proxySource.includes('supabase.auth.getUser()'),
-  'proxy.ts must verify the user with getUser(), not getSession()'
+  proxySource.includes('supabase.auth.getSession()'),
+  'proxy.ts must read the session locally with getSession(), not getUser()'
 );
-console.log('✓ proxy.ts verifies users with getUser() (no insecure-session warning)');
+assert.ok(
+  !proxySource.includes('supabase.auth.getUser()'),
+  'proxy.ts must not call getUser() (Auth-server round trip per request)'
+);
+console.log('✓ proxy.ts reads sessions locally with getSession() (no per-request Auth round trip)');
 
 // Onboarding gating moved client-side; it must still exist there.
 assert.ok(

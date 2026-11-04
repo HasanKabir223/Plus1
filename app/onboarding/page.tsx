@@ -40,55 +40,65 @@ export default function OnboardingPage() {
   const [username, setUsername] = useState(getCleanUsername(profile));
   const [bio, setBio] = useState(profile?.bio || '');
   const [selectedTags, setSelectedTags] = useState<string[]>(profile?.looking_for || []);
-  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<{ username: string; taken: boolean } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (profile) {
-      const pName = getCleanDisplayName(profile);
-      const uName = getCleanUsername(profile);
-      if (!displayName && pName) setDisplayName(pName);
-      if (!username && uName) setUsername(uName);
-      if (!bio && profile.bio) setBio(profile.bio);
-      if (selectedTags.length === 0 && profile.looking_for) setSelectedTags(profile.looking_for);
-    }
-  }, [profile]);
+  // Fill still-empty fields when the profile first loads. Render-phase
+  // adjustment keyed by profile id, so it runs once per loaded profile.
+  const [syncedProfileId, setSyncedProfileId] = useState<string | null>(null);
+  if (profile && syncedProfileId !== profile.id) {
+    setSyncedProfileId(profile.id);
+    const pName = getCleanDisplayName(profile);
+    const uName = getCleanUsername(profile);
+    if (!displayName && pName) setDisplayName(pName);
+    if (!username && uName) setUsername(uName);
+    if (!bio && profile.bio) setBio(profile.bio);
+    if (selectedTags.length === 0 && profile.looking_for) setSelectedTags(profile.looking_for);
+  }
 
-  // Live username format & availability check
+  // Username error is derived: format rules first, then the async
+  // availability result for the exact name that was checked, then any
+  // error reported by the last submit attempt.
+  const cleanUsernameCheck = username.trim().toLowerCase();
+  const currentCleanUsername = getCleanUsername(profile);
+  let usernameError: string | null = null;
+  if (cleanUsernameCheck && !USERNAME_REGEX.test(cleanUsernameCheck)) {
+    usernameError = 'Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores.';
+  } else if (cleanUsernameCheck.startsWith('user_')) {
+    usernameError = 'Usernames starting with "user_" are reserved. Please choose another.';
+  } else if (
+    cleanUsernameCheck &&
+    cleanUsernameCheck !== currentCleanUsername &&
+    availability?.username === cleanUsernameCheck &&
+    availability.taken
+  ) {
+    usernameError = 'This username is already taken. Please choose another.';
+  } else if (submitError) {
+    usernameError = submitError;
+  }
+
+  // Live username availability check (format errors are derived above)
   useEffect(() => {
     const clean = username.trim().toLowerCase();
-    if (!clean) {
-      setUsernameError(null);
+    if (!clean || !USERNAME_REGEX.test(clean) || clean.startsWith('user_')) {
       return;
     }
 
-    if (!USERNAME_REGEX.test(clean)) {
-      setUsernameError('Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores.');
+    if (clean === getCleanUsername(profile)) {
       return;
     }
 
-    if (clean.startsWith('user_')) {
-      setUsernameError('Usernames starting with "user_" are reserved. Please choose another.');
-      return;
-    }
-
-    const currentClean = getCleanUsername(profile);
-    if (clean === currentClean) {
-      setUsernameError(null);
-      return;
-    }
-
-    setIsCheckingUsername(true);
     const timer = setTimeout(async () => {
+      setIsCheckingUsername(true);
       try {
         const existing = await db.getProfileByUsername(clean);
-        if (existing && existing.id !== user?.id) {
-          setUsernameError('This username is already taken. Please choose another.');
-        } else {
-          setUsernameError(null);
-        }
+        setAvailability({
+          username: clean,
+          taken: Boolean(existing && existing.id !== user?.id),
+        });
       } catch {
         // network or ignore
       } finally {
@@ -113,17 +123,17 @@ export default function OnboardingPage() {
     const cleanName = displayName.trim();
 
     if (!cleanUsername) {
-      setUsernameError('Username is required.');
+      setSubmitError('Username is required.');
       return;
     }
 
     if (!USERNAME_REGEX.test(cleanUsername)) {
-      setUsernameError('Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores.');
+      setSubmitError('Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores.');
       return;
     }
 
     if (cleanUsername.startsWith('user_')) {
-      setUsernameError('Usernames starting with "user_" are reserved. Please choose another.');
+      setSubmitError('Usernames starting with "user_" are reserved. Please choose another.');
       return;
     }
 
@@ -167,7 +177,7 @@ export default function OnboardingPage() {
         message.toLowerCase().includes('duplicate key') ||
         message.toLowerCase().includes('already taken')
       ) {
-        setUsernameError('This username is already taken. Please choose another.');
+        setSubmitError('This username is already taken. Please choose another.');
       } else {
         setGeneralError(message || 'Failed to save profile.');
       }
@@ -244,7 +254,10 @@ export default function OnboardingPage() {
                 id="username"
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                onChange={(e) => {
+                  setUsername(e.target.value.toLowerCase());
+                  setSubmitError(null);
+                }}
                 placeholder="hasankabir"
                 required
                 autoComplete="off"

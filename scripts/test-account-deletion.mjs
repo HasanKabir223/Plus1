@@ -1,6 +1,13 @@
 import assert from 'node:assert';
 import { createClient } from '@supabase/supabase-js';
 
+// Load repo-root .env so the suite also runs as plain `node scripts/...`
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // No .env file; rely on the caller's environment.
+}
+
 console.log('--- Running Account Deletion Tests ---');
 
 // Test 1: Verify environment variables and Admin Client initialization
