@@ -7,6 +7,7 @@ from backend import config, llm
 from backend.tests.helpers import run
 from backend.llm import (
     LLMConfigError,
+    LLMGenerationError,
     LLMRateLimited,
     LLMUnavailable,
     llm_complete,
@@ -184,6 +185,14 @@ def test_startup_silent_when_model_listed(caplog):
     assert not [r for r in caplog.records if "not in provider" in r.message]
 
 
+def test_startup_silent_when_model_listed_with_prefix(caplog):
+    # Gemini's OpenAI-compatible /models returns "models/<id>" entries.
+    FakeAsyncClient.script = [FakeResponse(200, {"data": [{"id": "models/test-model"}]})]
+    with caplog.at_level("WARNING", logger="backend.llm"):
+        run(warn_if_model_unlisted())
+    assert not [r for r in caplog.records if "not in provider" in r.message]
+
+
 def test_startup_check_never_raises():
     FakeAsyncClient.script = [httpx.TimeoutException("slow")]
     assert run(warn_if_model_unlisted()) is None
@@ -219,6 +228,41 @@ def test_400_without_effort_raises_immediately():
     with pytest.raises(LLMConfigError):
         run(llm_complete([{"role": "user", "content": "hi"}]))
     assert len(FakeAsyncClient.seen_requests) == 1
+
+
+# Groq intermittently answers a json_object request with HTTP 400
+# code=json_validate_failed when the sampled output is not valid JSON.
+# That is a generation failure, not a configuration problem: one fresh
+# sample usually succeeds, and it must never surface as LLMConfigError.
+_GENERATION_400 = {
+    "error": {
+        "message": "Failed to validate JSON. Please adjust your prompt.",
+        "type": "invalid_request_error",
+        "code": "json_validate_failed",
+        "failed_generation": "",
+    }
+}
+
+
+def test_generation_400_retries_once_then_succeeds():
+    FakeAsyncClient.script = [
+        FakeResponse(400, _GENERATION_400),
+        FakeResponse(200, _ok_payload()),
+    ]
+    result = run(llm_complete([{"role": "user", "content": "hi"}]))
+    assert result.text == '{"action": "none"}'
+    assert len(FakeAsyncClient.seen_requests) == 2
+
+
+def test_generation_400_twice_raises_generation_error_not_config():
+    FakeAsyncClient.script = [
+        FakeResponse(400, _GENERATION_400),
+        FakeResponse(400, _GENERATION_400),
+    ]
+    with pytest.raises(LLMGenerationError):
+        run(llm_complete([{"role": "user", "content": "hi"}]))
+    # Bounded: one retry, then terminal.
+    assert len(FakeAsyncClient.seen_requests) == 2
 
 
 def test_double_400_with_effort_raises(monkeypatch):

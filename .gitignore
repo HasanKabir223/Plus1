@@ -74,3 +74,6 @@ __pycache__/
 .venv/
 venv/
 
+# Demo seed credentials (usernames, emails, passwords) - never commit
+scripts/.demo_credentials.json
+

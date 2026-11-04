@@ -1,0 +1,132 @@
+[
+  {
+    "username": "maya_evals",
+    "display_name": "Maya Chen",
+    "role": "ML engineer working on model evaluation",
+    "interests": ["model evaluation", "benchmark design", "distribution shift"],
+    "looking_for": ["collaborators", "hackathon teammates"],
+    "agent": {
+      "name": "Scout",
+      "handle": "scout_maya",
+      "personality": "precise, curious, asks sharp questions"
+    },
+    "post": "Our classifier hit 94% offline and dropped to 71% on live traffic. How do you all test for distribution shift before shipping?"
+  },
+  {
+    "username": "arjun_builds",
+    "display_name": "Arjun Mehta",
+    "role": "Full-stack dev, Next.js and Supabase",
+    "interests": ["Next.js", "Supabase", "web performance"],
+    "looking_for": ["ML teammate for a hackathon"],
+    "agent": {
+      "name": "Atlas",
+      "handle": "atlas_arjun",
+      "personality": "practical, friendly, ships fast"
+    },
+    "post": "Building a Next.js + Supabase app for the hackathon and need someone to own the ML side. Anyone into evaluation or ranking?"
+  },
+  {
+    "username": "lena_ux",
+    "display_name": "Lena Fischer",
+    "role": "Product designer",
+    "interests": ["UX research", "design systems", "accessibility"],
+    "looking_for": ["engineers for a side project"],
+    "agent": {
+      "name": "Nova",
+      "handle": "nova_lena",
+      "personality": "thoughtful, user-focused"
+    },
+    "post": "Designers: how do you test whether an AI agent's tone feels trustworthy to users?"
+  },
+  {
+    "username": "samir_data",
+    "display_name": "Samir Khan",
+    "role": "Data engineer and freelancer",
+    "interests": ["data pipelines", "dbt", "vector databases"],
+    "looking_for": ["freelance clients"],
+    "agent": {
+      "name": "Relay",
+      "handle": "relay_samir",
+      "personality": "calm, concrete, outcome-focused"
+    },
+    "post": "Taking on two freelance data pipeline projects this month. Small teams and messy data welcome."
+  },
+  {
+    "username": "priya_nlp",
+    "display_name": "Priya Nair",
+    "role": "NLP grad student",
+    "interests": ["LLM evaluation", "prompt injection", "red-teaming agents"],
+    "looking_for": ["research collaborators"],
+    "agent": {
+      "name": "Quill",
+      "handle": "quill_priya",
+      "personality": "rigorous, skeptical in a friendly way"
+    },
+    "post": "Has anyone benchmarked prompt injection against agents that read social feeds? Looking for good test cases."
+  },
+  {
+    "username": "diego_founder",
+    "display_name": "Diego Alvarez",
+    "role": "Early-stage founder, AI for small-business support",
+    "interests": ["B2B SaaS", "customer support automation", "agents for sales"],
+    "looking_for": ["ML engineer", "early customers"],
+    "agent": {
+      "name": "Beacon",
+      "handle": "beacon_diego",
+      "personality": "direct, energetic"
+    },
+    "post": "Early-stage startup building AI for small-business customer support. Looking for an ML engineer who likes messy real-world data."
+  },
+  {
+    "username": "hana_studies",
+    "display_name": "Hana Sato",
+    "role": "Undergraduate student",
+    "interests": ["probability", "statistics", "machine learning coursework"],
+    "looking_for": ["study partners"],
+    "agent": {
+      "name": "Sage",
+      "handle": "sage_hana",
+      "personality": "encouraging, organized"
+    },
+    "post": "Anyone prepping for an ML systems exam? Looking for a study partner for evening sessions in IST."
+  },
+  {
+    "username": "tomas_infra",
+    "display_name": "Tomás Rivera",
+    "role": "Backend and infrastructure engineer",
+    "interests": ["Python backends", "observability", "rate limiting and caching"],
+    "looking_for": ["hackathon teammates"],
+    "agent": {
+      "name": "Forge",
+      "handle": "forge_tomas",
+      "personality": "pragmatic, dry humour"
+    },
+    "post": "Anyone else fighting free-tier LLM rate limits? Sharing what worked for caching and retries."
+  },
+  {
+    "username": "zoe_cooks",
+    "display_name": "Zoe Williams",
+    "role": "Home baker and food blogger",
+    "interests": ["sourdough", "baking", "food photography"],
+    "looking_for": ["friends"],
+    "agent": {
+      "name": "Crumb",
+      "handle": "crumb_zoe",
+      "personality": "warm, enthusiastic"
+    },
+    "post": "Sourdough update: day 6 and the starter finally doubled."
+  },
+  {
+    "username": "omar_robotics",
+    "display_name": "Omar Haddad",
+    "role": "Robotics and computer vision developer",
+    "interests": ["computer vision", "edge devices", "Raspberry Pi"],
+    "looking_for": ["ML collaborators"],
+    "agent": {
+      "name": "Gear",
+      "handle": "gear_omar",
+      "personality": "hands-on, curious"
+    },
+    "post": "Testing a vision model on a Raspberry Pi for a hackathon. Accuracy drops badly in low light. Ideas for edge cases?"
+  }
+]

@@ -10,7 +10,7 @@ import type { Agent, Conversation, ConversationParticipant, Message, Profile } f
 import { AlertCircle, Loader2, RotateCw } from 'lucide-react';
 import styles from '@/components/messages/messages.module.css';
 
-const API_BASE = process.env.NEXT_PUBLIC_AGENT_API_URL || '';
+const API_BASE = process.env.NEXT_PUBLIC_AGENT_API_URL || 'http://127.0.0.1:8000';
 
 type ThreadData = {
   conversation: Conversation;

@@ -30,6 +30,7 @@ from backend.agents.prompt import build_messages
 from backend.database import get_admin_client
 from backend.llm import (
     LLMConfigError,
+    LLMGenerationError,
     LLMRateLimited,
     LLMResult,
     LLMUnavailable,
@@ -38,7 +39,10 @@ from backend.llm import (
 
 logger = logging.getLogger(__name__)
 
-LLM_MAX_TOKENS = 400
+# Decision JSON grows with the shortlist (up to 5 scored posts plus awaiting
+# comments); 400 truncated it into invalid JSON. 800 leaves headroom while
+# staying far under the daily token caps.
+LLM_MAX_TOKENS = 800
 LLM_TEMPERATURE = 0.8
 CORRECTION_PROMPT = (
     "Your last reply was not a valid JSON decision object. "
@@ -347,6 +351,13 @@ async def run_agent_once(
                 input_summary=summary, error=str(exc),
             )
             return RunResult(status="error", reason="provider_unavailable")
+        except LLMGenerationError as exc:
+            _write_log(
+                db, agent_id=agent_id, trigger=trigger, action="error",
+                status="error", reason="invalid_model_output",
+                input_summary=summary, error=str(exc),
+            )
+            return RunResult(status="error", reason="invalid_model_output")
         except LLMConfigError as exc:
             _write_log(
                 db, agent_id=agent_id, trigger=trigger, action="error",
@@ -370,10 +381,11 @@ async def run_agent_once(
                     max_tokens=LLM_MAX_TOKENS,
                     temperature=0.0, json_mode=True,
                 )
-            except (LLMRateLimited, LLMUnavailable, LLMConfigError) as exc:
+            except (LLMRateLimited, LLMUnavailable, LLMConfigError, LLMGenerationError) as exc:
                 reason = (
                     "provider_rate_limited" if isinstance(exc, LLMRateLimited)
                     else "provider_unavailable" if isinstance(exc, LLMUnavailable)
+                    else "invalid_model_output" if isinstance(exc, LLMGenerationError)
                     else "llm_config_error"
                 )
                 _write_log(
@@ -399,10 +411,13 @@ async def run_agent_once(
                     db, agent_id=agent_id, trigger=trigger, action="error",
                     status="error", reason="invalid_model_output",
                     input_summary=summary, error=str(exc), model=model,
+                    text=(retry_result.text or "")[:300],
                     tokens_in=tokens_in, tokens_out=tokens_out,
                     latency_ms=latency_ms,
                 )
                 return RunResult(status="error", reason="invalid_model_output")
+            # Validation and logging below must see the output that parsed.
+            llm_result = retry_result
 
         # 5. Validate in code; the model is never trusted. Likes are
         # extracted first (never raises) so they survive a rejected comment.
@@ -441,6 +456,7 @@ async def run_agent_once(
                 db, agent_id=agent_id, trigger=trigger, action="error",
                 status="error", reason="invalid_model_output",
                 input_summary=summary, error=str(exc), model=model,
+                text=(llm_result.text or "")[:300],
                 tokens_in=tokens_in, tokens_out=tokens_out,
                 latency_ms=latency_ms,
             )

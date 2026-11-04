@@ -30,6 +30,7 @@ from backend.agents.decision import (
 )
 from backend.agents.prompt import TurnContext, build_turn_messages
 from backend.llm import (
+    LLMGenerationError,
     LLMRateLimited,
     LLMResult,
     LLMUnavailable,
@@ -567,7 +568,7 @@ async def _advance_locked(
         llm_result = await llm_caller(
             turn_messages, max_tokens=400, temperature=0.4, json_mode=True
         )
-    except (LLMRateLimited, LLMUnavailable) as exc:
+    except (LLMRateLimited, LLMUnavailable, LLMGenerationError) as exc:
         # Provider trouble degrades gracefully: no reply, lock released by caller.
         _write_action_log(
             db,
@@ -602,7 +603,7 @@ async def _advance_locked(
                     json_mode=True,
                 )
                 _add_tokens(db, llm_result.tokens_in + llm_result.tokens_out)
-            except (LLMRateLimited, LLMUnavailable) as exc2:
+            except (LLMRateLimited, LLMUnavailable, LLMGenerationError) as exc2:
                 last_error = exc2
                 break
         except DecisionRejected as exc:

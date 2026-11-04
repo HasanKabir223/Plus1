@@ -41,6 +41,15 @@ class LLMConfigError(LLMError):
     """Missing key / bad credentials / bad request. Message never holds the key."""
 
 
+class LLMGenerationError(LLMError):
+    """Provider rejected its own sampled output (e.g. invalid JSON).
+
+    Groq answers a json_object request whose generation fails validation
+    with HTTP 400 code=json_validate_failed. That is a sampling failure,
+    not a configuration problem: a fresh sample usually succeeds.
+    """
+
+
 @dataclass
 class LLMResult:
     text: str
@@ -81,6 +90,27 @@ def _usage(payload: dict[str, Any]) -> tuple[int, int]:
         return 0, 0
 
 
+def _is_generation_rejection(resp: httpx.Response) -> bool:
+    """True when a 400 means 'the sampled output failed validation'.
+
+    Matches Groq's json_validate_failed / failed_generation shape (and the
+    older 'Failed to generate JSON' wording). Any other 400 is a real bad
+    request and stays a config error.
+    """
+    try:
+        payload = resp.json()
+    except ValueError:
+        return False
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return False
+    code = str(error.get("code") or "").lower()
+    if code in ("json_validate_failed", "failed_generation"):
+        return True
+    message = str(error.get("message") or "").lower()
+    return "failed to validate json" in message or "failed to generate json" in message
+
+
 def _retry_after_seconds(resp: httpx.Response) -> int | None:
     raw = resp.headers.get("retry-after") or resp.headers.get("retry-after-ms")
     if raw is None:
@@ -106,7 +136,9 @@ async def llm_complete(
     When LLM_REASONING_EFFORT is set, it is sent as reasoning_effort; a 400
     on such a request drops the field and resends once before giving up.
     Raises LLMRateLimited on 429, LLMUnavailable after one retry on
-    timeouts/5xx, LLMConfigError on missing key / 401 / 400.
+    timeouts/5xx, LLMConfigError on missing key / 401 / other 400s, and
+    LLMGenerationError when the provider rejects its own sampled output
+    (400 json_validate_failed) twice in a row.
     """
     if not config.LLM_API_KEY:
         raise LLMConfigError("LLM_API_KEY is not configured")
@@ -135,6 +167,7 @@ async def llm_complete(
 
     last_error: Exception | None = None
     effort_dropped = False
+    generation_retried = False
     attempt = 1
     while True:
         started = time.monotonic()
@@ -166,6 +199,20 @@ async def llm_complete(
             raise LLMConfigError("LLM provider rejected the API key")
 
         if resp.status_code == 400:
+            if _is_generation_rejection(resp):
+                # The provider rejected its own sampled output. Resample
+                # once; a second rejection is terminal but is NOT a
+                # config error, so callers can report unusable output.
+                if not generation_retried:
+                    generation_retried = True
+                    logger.warning(
+                        "llm generation rejected model=%s, resampling once", model
+                    )
+                    continue
+                logger.error("llm generation rejected twice model=%s", model)
+                raise LLMGenerationError(
+                    "LLM provider rejected its own generated output"
+                )
             if "reasoning_effort" in body and not effort_dropped:
                 # The field itself may be the problem: drop it and resend
                 # once within the same attempt (no backoff, no budget cost).
@@ -245,7 +292,9 @@ async def warn_if_model_unlisted() -> None:
         return
     data = payload.get("data") or []
     ids = {m.get("id") for m in data if isinstance(m, dict)}
-    if config.LLM_MODEL not in ids:
+    # Gemini's OpenAI-compatible /models prefixes ids ("models/gemini-...").
+    bare = {i.split("/", 1)[-1] if isinstance(i, str) else i for i in ids}
+    if config.LLM_MODEL not in ids and config.LLM_MODEL not in bare:
         logger.warning(
             "LLM_MODEL %s not in provider /models list", config.LLM_MODEL
         )

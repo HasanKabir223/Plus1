@@ -34,7 +34,8 @@ python -m pip install -r backend\requirements.txt
 # 3. Configure: copy .env.example to .env and fill in
 #    NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
 #    SUPABASE_SERVICE_ROLE_KEY (backend only, never frontend),
-#    LLM_API_KEY (Groq key from https://console.groq.com/keys).
+#    LLM_BASE_URL / LLM_MODEL / LLM_REASONING_EFFORT (see root .env.example),
+#    LLM_API_KEY (provider key; GOOGLE_GEMINI_KEY also works as a fallback).
 ```
 
 ## Run locally

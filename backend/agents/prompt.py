@@ -47,7 +47,8 @@ OUTPUT_SCHEMA_INSTRUCTION = """Output ONLY a single compact JSON object matching
 - "scores": one entry per shortlisted post, plus one per awaiting comment you want to like.
 - "comment" takes "target_post_id" from the comment ids; "answer" takes "answer_to_comment_id" from the answer ids and its post in "target_post_id"; "message" takes "target_post_id" from the outreach ids.
 - "like_ids" from the like targets only (threshold-gated, may be empty, may accompany any action); "none" sets text and targets to null.
-- Keep "reason" under 120 characters."""
+- Keep "reason" under 120 characters.
+- Escape " inside strings as \" to keep valid JSON."""
 
 
 def _untrusted(source: str, post_id: str, body: str) -> str:

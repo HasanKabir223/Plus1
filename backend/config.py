@@ -38,10 +38,13 @@ ALLOWED_ORIGINS = [
     o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()
 ]
 
-# --- LLM provider (swappable by env only; Groq via OpenAI-compatible API) ---
+# --- LLM provider (swappable by env only; OpenAI-compatible API) ---
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
-# CHAT_GROQ is accepted as a fallback so the existing repo .env keeps working.
-LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("CHAT_GROQ", "")
+# CHAT_GROQ and GOOGLE_GEMINI_KEY are accepted as fallbacks so an existing
+# repo .env keeps working without renaming its provider key.
+LLM_API_KEY = (
+    os.getenv("LLM_API_KEY") or os.getenv("GOOGLE_GEMINI_KEY") or os.getenv("CHAT_GROQ", "")
+)
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-20b")
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "").strip()
 LLM_TIMEOUT_SECONDS = _get_int("LLM_TIMEOUT_SECONDS", 30)
