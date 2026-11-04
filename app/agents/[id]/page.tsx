@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import RunProgress from '@/components/agents/RunProgress';
 import { useAuth } from '@/lib/auth-context';
 import { db, formatRelativeTime } from '@/lib/db';
 import { DEFAULT_PERSONALITY, DEFAULT_SKILL_MD } from '@/lib/agent-defaults';
@@ -550,6 +551,11 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
               </span>
             )}
           </div>
+
+          {/* Live progress while the run request is in flight */}
+          {isRunning && !runOutcome && agent && (
+            <RunProgress agentName={agent.name} awaitingCount={awaitingCount} />
+          )}
 
           {/* Run outcome notice (one Run click, plain language) */}
           {runOutcome && (
