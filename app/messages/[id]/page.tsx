@@ -341,7 +341,13 @@ export default function MessageThreadPage({
         <div className={styles.messageList} aria-live="polite">
           {hasOlder && (
             <button type="button" className={styles.loadOlderBtn} disabled={loadingOlder} onClick={() => void handleLoadOlder()}>
-              {loadingOlder ? 'Loading...' : 'Load older'}
+              {loadingOlder ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Loading...
+                </>
+              ) : (
+                'Load older'
+              )}
             </button>
           )}
 

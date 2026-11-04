@@ -177,7 +177,7 @@ h1, h2, h3, h4 {
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--human);
   cursor: pointer;
-  transition: box-shadow 100ms ease, transform 100ms ease;
+  transition: box-shadow 100ms ease, transform 100ms ease, opacity 120ms ease;
 }
 
 .btn-primary:hover {
@@ -204,7 +204,7 @@ h1, h2, h3, h4 {
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--ink);
   cursor: pointer;
-  transition: background-color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
+  transition: background-color 100ms ease, box-shadow 100ms ease, transform 100ms ease, opacity 120ms ease;
 }
 
 .btn-secondary:hover {
@@ -224,6 +224,33 @@ a:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--human);
   outline-offset: 2px;
+}
+
+/* Disabled buttons visibly fade so busy states (posting, logging in, running)
+   never look stuck. Placed after :hover so it wins on equal specificity. */
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Busy spinners (lucide Loader2) used across auth, feed, messages, agent pages */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation: none;
+  }
 }
 
 /* ======================== CHIPS ======================== */

@@ -16,6 +16,7 @@ import {
   AlertCircle,
   CheckCircle,
   ExternalLink,
+  Loader2,
   Save,
 } from 'lucide-react';
 
@@ -542,11 +543,13 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                   style={{
                     padding: '8px 16px',
                     fontSize: '13px',
-                    opacity: agent.status === 'paused' || cooldownLeft > 0 ? 0.4 : 1,
+                    opacity: agent.status === 'paused' || cooldownLeft > 0 || isRunning ? 0.4 : 1,
                   }}
                 >
                   {isRunning ? (
-                    'Running...'
+                    <>
+                      <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Running...
+                    </>
                   ) : cooldownLeft > 0 ? (
                     `Run now (${formatCountdown(cooldownLeft)})`
                   ) : (
@@ -562,11 +565,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                   style={{
                     padding: '8px 16px',
                     fontSize: '13px',
-                    opacity: agent.status === 'paused' ? 0.4 : 1,
+                    opacity: agent.status === 'paused' || chatting ? 0.4 : 1,
                   }}
                   title={agent.status === 'paused' ? 'This agent is paused and cannot chat right now' : 'Chat with your agent'}
                 >
-                  {chatting ? 'Opening...' : 'Chat with your agent'}
+                  {chatting ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Opening...
+                    </>
+                  ) : (
+                    'Chat with your agent'
+                  )}
                 </button>
               </div>
             )}
@@ -904,7 +913,15 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 className="btn-primary"
                 style={{ alignSelf: 'flex-start', padding: '8px 16px', fontSize: '13px' }}
               >
-                <Save size={13} /> {isSaving ? 'Saving...' : 'Save configuration'}
+                {isSaving ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={13} /> Save configuration
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -921,11 +938,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
                 style={{
                   padding: '8px 16px',
                   fontSize: '13px',
-                  opacity: agent.status === 'paused' ? 0.4 : 1,
+                  opacity: agent.status === 'paused' || chatting ? 0.4 : 1,
                 }}
                 title={agent.status === 'paused' ? 'This agent is paused and cannot chat right now' : 'Chat with this agent'}
               >
-                {chatting ? 'Opening...' : 'Chat'}
+                {chatting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" /> Opening...
+                  </>
+                ) : (
+                  'Chat'
+                )}
               </button>
               {agent.status === 'paused' && (
                 <span style={{ fontSize: '13px', color: 'var(--ink-soft)' }}>

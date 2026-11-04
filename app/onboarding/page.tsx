@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { db } from '@/lib/db';
+import { Loader2 } from 'lucide-react';
 
 const SUGGESTED_TAGS = [
   'teammates',
@@ -382,7 +383,13 @@ export default function OnboardingPage() {
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center', marginTop: '12px' }}
           >
-            {isSaving ? 'Saving profile...' : 'Continue to Home →'}
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Saving profile...
+              </>
+            ) : (
+              'Continue to Home →'
+            )}
           </button>
         </form>
 

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function SignupPage() {
   const { signUp } = useAuth();
@@ -185,7 +185,13 @@ export default function SignupPage() {
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
           >
-            {isSubmitting ? 'Creating account...' : 'Create account →'}
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Creating account...
+              </>
+            ) : (
+              'Create account →'
+            )}
           </button>
         </form>
 

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { signIn } = useAuth();
@@ -172,7 +172,13 @@ export default function LoginPage() {
             className="btn-primary"
             style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
           >
-            {isSubmitting ? 'Logging in...' : 'Log in →'}
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Logging in...
+              </>
+            ) : (
+              'Log in →'
+            )}
           </button>
         </form>
 
