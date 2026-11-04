@@ -4,6 +4,7 @@ from backend.agents.interests import (
     MAX_TERMS,
     extract_interest_terms,
     overlap_score,
+    rank_score,
 )
 
 
@@ -36,8 +37,40 @@ def test_heading_case_insensitive_and_bullets_variants():
 
 
 def test_stopwords_and_short_words_dropped():
-    terms = extract_interest_terms("## Interests\n- the AI and me\n", "", [])
+    terms = extract_interest_terms("## Interests\n- the UX and me to do\n", "", [])
     assert terms == []
+
+
+def test_domain_short_terms_kept():
+    terms = extract_interest_terms("## Interests\n- ML research\n- AI safety\n", "", [])
+    assert "ml" in terms
+    assert "ai" in terms
+    assert "ml research" in terms
+
+
+def test_hiring_post_matches_ml_interest():
+    terms = extract_interest_terms(
+        "## Interests\n- ML research collaborators\n", "", []
+    )
+    assert overlap_score("we are hiring ML engineer, DM if interested", terms) >= 1
+    assert overlap_score("sourdough starter finally doubled", terms) == 0
+
+
+def test_collaboration_ask_outranks_plain_chatter():
+    terms = extract_interest_terms(
+        "## Interests\n- ML research collaborators\n", "", []
+    )
+    ask = rank_score("we are hiring ML engineer, DM if interested", terms)
+    chatter = rank_score("thinking about research collaborators today", terms)
+    assert overlap_score("thinking about research collaborators today", terms) == 3
+    assert ask > chatter
+
+
+def test_ask_bonus_needs_overlap():
+    terms = extract_interest_terms(
+        "## Interests\n- ML research collaborators\n", "", []
+    )
+    assert rank_score("hiring a pastry chef, DM if interested", terms) == 0
 
 
 def test_dedupe_and_cap():

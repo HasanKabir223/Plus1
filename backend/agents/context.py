@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend import config
-from backend.agents.interests import extract_interest_terms, overlap_score
+from backend.agents.interests import extract_interest_terms, rank_score, overlap_score
 
 logger = logging.getLogger(__name__)
 
@@ -410,16 +410,16 @@ def load_context(client: Any, agent_id: str) -> AgentContext:
 
     ranked = sorted(
         (
-            (overlap_score(p.body, interest_terms), p)
+            (rank_score(p.body, interest_terms), overlap_score(p.body, interest_terms), p)
             for p in recent_feed
             if _shortlist_ok(p)
         ),
-        key=lambda item: (item[0], item[1].created_at or ""),
+        key=lambda item: (item[0], item[2].created_at or ""),
         reverse=True,
     )
     shortlist = [
         ShortlistedPost(post=p, overlap=n)
-        for n, p in ranked
+        for _, n, p in ranked
         if n >= config.PRE_FILTER_MIN_OVERLAP
     ][: max(0, config.PRE_FILTER_TOP_K)]
 

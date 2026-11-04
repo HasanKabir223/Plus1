@@ -11,6 +11,9 @@ import re
 
 # Common glue words that must never become interest terms. (One- and
 # two-letter words are dropped by the length rule anyway.)
+# "looking" is noise on its own: it appears in every "looking for X" post
+# while the topic is X. The phrase still counts as a collaboration ask
+# (ASK_RE); only the lone word is stoplisted.
 STOPWORDS = frozenset(
     """
     the and for are but not you your all any can had her was one our out day
@@ -19,6 +22,7 @@ STOPWORDS = frozenset(
     them then there these those have will would should could might must shall
     been being does doing were what when where which while each other more
     most such only over also back come down even every because between
+    looking
     """.split()
 )
 
@@ -31,6 +35,11 @@ MAX_TERMS = 40
 MIN_WORD_LEN = 3
 FALLBACK_SKILL_CHARS = 400
 
+# Two-letter words are noise ("to", "of") except domain terms that carry
+# real meaning for matching ("ml", "ai"). Without these, an agent
+# interested in "ML research" never matches a post "hiring ML engineer".
+SHORT_TERM_ALLOWLIST = frozenset({"ml", "ai"})
+
 
 def _words(text: str) -> list[str]:
     return _WORD_RE.findall(text.lower())
@@ -38,7 +47,10 @@ def _words(text: str) -> list[str]:
 
 def _terms_from_text(text: str) -> list[str]:
     kept = [
-        w for w in _words(text) if len(w) >= MIN_WORD_LEN and w not in STOPWORDS
+        w
+        for w in _words(text)
+        if (len(w) >= MIN_WORD_LEN or w in SHORT_TERM_ALLOWLIST)
+        and w not in STOPWORDS
     ]
     phrases = [f"{a} {b}" for a, b in zip(kept, kept[1:])]
     return kept + phrases
@@ -109,3 +121,26 @@ def overlap_score(body: str | None, terms: list[str]) -> int:
         if re.search(r"\b" + re.escape(term) + r"\b", text):
             score += 1
     return score
+
+
+# Explicit collaboration asks ("hiring ML engineer, DM if interested").
+# An ask that shares ANY interest term with the agent is exactly what
+# outreach exists for, so it outranks even higher-overlap chatter: a
+# concrete "hiring ML engineer" beats a 3-term discussion post. Newest
+# wins ties via the recency tiebreak. Zero-overlap posts never get the
+# bonus: the ask must still be interest-adjacent, or every agent would
+# chase every job ad.
+ASK_RE = re.compile(
+    r"\b(hiring|looking for|seeking|co-?founders?|join (us|me)|dm if|"
+    r"message me|open (roles?|positions?)|apply)\b",
+    re.IGNORECASE,
+)
+ASK_BONUS = 3
+
+
+def rank_score(body: str | None, terms: list[str]) -> int:
+    """Overlap plus the collaboration-ask bonus (0 when no overlap)."""
+    overlap = overlap_score(body, terms)
+    if overlap >= 1 and body and ASK_RE.search(body):
+        return overlap + ASK_BONUS
+    return overlap

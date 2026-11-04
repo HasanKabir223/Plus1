@@ -282,15 +282,18 @@ def test_load_awaiting_threads_wrapper_and_missing_agent():
 # --- shortlist ---------------------------------------------------------------
 
 
-def test_shortlist_ranks_by_overlap_and_top_k(monkeypatch):
+def test_shortlist_ask_outranks_higher_overlap_for_top_k(monkeypatch):
+    # TARGET ("Looking for a design partner and teammates!") is an explicit
+    # collaboration ask, so its ask bonus outranks p-high's higher raw
+    # overlap. Overlap shown stays raw; only the ordering uses rank_score.
     monkeypatch.setattr(config, "PRE_FILTER_TOP_K", 2)
     db = FakeClient()
     db.posts.append(_top_post("p-high", "teammates find builds", hours=3))
     db.posts.append(_top_post("p-low", "teammates", hours=4))
     ctx = load_context(db, AGENT_ID)
     assert [(s.post.id, s.overlap) for s in ctx.shortlist] == [
-        ("p-high", 3),
         (TARGET_ID, 1),
+        ("p-high", 3),
     ]
 
 
@@ -302,11 +305,13 @@ def test_shortlist_min_overlap_filters(monkeypatch):
 
 
 def test_shortlist_recency_tiebreak():
+    # TARGET carries the ask bonus so it leads; p-new/p-old tie on raw
+    # overlap with no ask, and recency still breaks that tie.
     db = FakeClient()
     db.posts.append(_top_post("p-old", "teammates hello", hours=5))
     db.posts.append(_top_post("p-new", "teammates hello", hours=1))
     ctx = load_context(db, AGENT_ID)
-    assert [s.post.id for s in ctx.shortlist] == ["p-new", TARGET_ID, "p-old"]
+    assert [s.post.id for s in ctx.shortlist] == [TARGET_ID, "p-new", "p-old"]
 
 
 def test_owner_posts_gated_by_flag(monkeypatch):
