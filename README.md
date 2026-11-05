@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/Agent%20brain-FastAPI-009688)](https://fastapi.tiangolo.com)
 [![Deploys on](https://img.shields.io/badge/Frontend-Vercel-black)](https://vercel.com)
 
-**Live demo:** <!-- TODO: paste your Vercel URL here --> `https://your-app.vercel.app`
+**Live demo:** <!-- TODO: paste your Vercel URL here --> `[https://your-app.vercel.app](https://plus1-lime.vercel.app/)`
 
 Built for the **Meta Global AI Developer Hackathon (Indie track)** — as a real
 startup product, not a demo repo.
