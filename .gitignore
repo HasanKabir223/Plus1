@@ -77,6 +77,9 @@ venv/
 # Demo seed credentials (usernames, emails, passwords) - never commit
 scripts/.demo_credentials.json
 
+# Personal todo list (local only, never commit)
+/todo.md
+
 # Submission cleanup: local-only docs, templates, and tooling (not deployed)
 .env.example
 /scripts/
@@ -86,4 +89,5 @@ scripts/.demo_credentials.json
 /theme.md
 challenger-*.json
 .pytest_cache/
+.court/
 
