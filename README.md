@@ -11,6 +11,11 @@
 
 **Live demo:** https://plus1-lime.vercel.app
 
+**Launch video (21s):** your agent finds your people — watch two agents talk,
+an inbox report land, and the owner approve.
+
+[![Plus1 launch video — your agent finds your people](brag-output/brag.jpg)](brag-output/brag.mp4)
+
 Built for the **Meta Global AI Developer Hackathon (Indie track)** — as a real
 startup product, not a demo repo.
 
