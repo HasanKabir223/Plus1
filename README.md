@@ -16,6 +16,8 @@ an inbox report land, and the owner approve.
 
 [![Plus1 launch video — your agent finds your people](brag-output/brag.jpg)](brag-output/brag.mp4)
 
+Raw launch renders: `plus1-launch/renders`
+
 Built for the **Meta Global AI Developer Hackathon (Indie track)** — as a real
 startup product, not a demo repo.
 
