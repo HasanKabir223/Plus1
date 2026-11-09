@@ -1,0 +1,127 @@
+<template>
+  <style>
+    @font-face { font-family: 'Geist'; font-style: normal; font-weight: 400; font-display: swap; src: url('assets/fonts/geist_latin-s.p.0wo2-3x5um7b1.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist'; font-style: normal; font-weight: 600; font-display: swap; src: url('assets/fonts/geist_latin-s.p.0wo2-3x5um7b1.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('assets/fonts/geist_mono_latin-s.p.0huioiwet2vx9.woff2') format('woff2'); }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #ffffff;
+      font-family: 'Geist', system-ui, sans-serif;
+    }
+    .ten-ground {
+      position: absolute;
+      inset: 0;
+      background: #f6f6f4;
+    }
+    .ten-card {
+      position: absolute;
+      left: 360px;
+      top: 300px;
+      width: 1200px;
+      min-height: 420px;
+      background: #ffffff;
+      border: 2px solid #e6e6e1;
+      border-radius: 24px;
+      padding: 48px;
+    }
+    .ten-head {
+      font-family: 'Geist Mono', monospace;
+      font-size: 28px;
+      color: #6b6b66;
+      margin-bottom: 28px;
+    }
+    .ten-draft {
+      font-size: 34px;
+      line-height: 1.5;
+      color: #111111;
+    }
+    .ten-caret {
+      display: inline-block;
+      width: 5px;
+      height: 40px;
+      background: #2b4cff;
+      vertical-align: -6px;
+      margin-left: 6px;
+    }
+    .ten-cursor {
+      position: absolute;
+      left: 1350px;
+      top: 560px;
+      width: 110px;
+      height: 110px;
+    }
+    .ten-seen {
+      position: absolute;
+      left: 360px;
+      top: 770px;
+      font-size: 28px;
+      color: #6b6b66;
+    }
+  </style>
+  <div id="root" data-composition-id="tension" data-width="1920" data-height="1080">
+    <div id="ten-ground" class="clip" data-start="0" data-duration="3.5" data-track-index="1">
+      <div class="ten-ground"></div>
+    </div>
+    <div id="ten-card" class="clip" data-start="0" data-duration="3.5" data-track-index="2">
+      <div class="ten-card">
+        <div class="ten-head">New message</div>
+        <div class="ten-draft"><span class="ten-w">Hi!</span> <span class="ten-w">I</span> <span class="ten-w">saw</span> <span class="ten-w">your</span> <span class="ten-w">profile</span> <span class="ten-w">and</span> <span class="ten-w">would</span> <span class="ten-w">love</span> <span class="ten-w">to</span> <span class="ten-w">connect.</span> <span class="ten-w">Are</span> <span class="ten-w">you</span> <span class="ten-w">free</span> <span class="ten-w">for</span> <span class="ten-w">a</span> <span class="ten-w">quick</span> <span class="ten-w">call</span> <span class="ten-w">this</span> <span class="ten-w">week?</span><span id="ten-caret" class="ten-caret"></span></div>
+      </div>
+    </div>
+    <div id="ten-cursor" class="clip" data-start="0" data-duration="3.5" data-track-index="3">
+      <div class="ten-cursor">
+        <svg viewBox="0 0 24 24" width="110" height="110"><path d="M5 3 L19 12 L12 13.5 L9.5 20 Z" fill="#111111" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div id="ten-seen" class="clip" data-start="2.1" data-duration="1.4" data-track-index="4">
+      <div class="ten-seen">Seen. No reply.</div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo(
+      "#ten-card .ten-card",
+      { y: 60, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.4, ease: "expo.out" },
+      0.05,
+    );
+    tl.fromTo(
+      "#ten-cursor .ten-cursor",
+      { x: 700, y: 340 },
+      { x: 0, y: 0, duration: 0.5, ease: "power1.inOut" },
+      0.1,
+    );
+    tl.fromTo(
+      ".ten-w",
+      { opacity: 0 },
+      { opacity: 1, duration: 0.08, ease: "power1.out", stagger: 0.08 },
+      0.5,
+    );
+    tl.fromTo("#ten-caret", { opacity: 1 }, { opacity: 0, duration: 0.01, immediateRender: false }, 1.0);
+    tl.fromTo("#ten-caret", { opacity: 0 }, { opacity: 1, duration: 0.01, immediateRender: false }, 1.3);
+    tl.fromTo("#ten-caret", { opacity: 1 }, { opacity: 0, duration: 0.01, immediateRender: false }, 2.0);
+    tl.fromTo("#ten-caret", { opacity: 0 }, { opacity: 1, duration: 0.01, immediateRender: false }, 2.3);
+    tl.fromTo(
+      ".ten-w",
+      { opacity: 1 },
+      { opacity: 0, duration: 0.04, ease: "power1.in", stagger: { each: 0.03, from: "end" }, immediateRender: false },
+      2.4,
+    );
+    tl.fromTo("#ten-caret", { opacity: 0 }, { opacity: 0, duration: 0.1, immediateRender: false }, 2.9);
+    tl.fromTo(
+      "#ten-cursor .ten-cursor",
+      { x: 0, y: 0 },
+      { x: -250, y: 190, duration: 0.5, ease: "power1.inOut", immediateRender: false },
+      2.9,
+    );
+    tl.fromTo(
+      "#ten-seen .ten-seen",
+      { opacity: 0 },
+      { opacity: 1, duration: 0.2, ease: "power1.out" },
+      2.1,
+    );
+    window.__timelines["tension"] = tl;
+  </script>
+</template>

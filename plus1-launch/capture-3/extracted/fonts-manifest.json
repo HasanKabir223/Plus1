@@ -1,0 +1,116 @@
+{
+  "files": [
+    {
+      "file": "3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawA1XphjhQYg.woff2",
+      "family": "Bricolage Grotesque 96pt",
+      "rawFamily": "Bricolage Grotesque 96pt ExtraBold",
+      "subfamily": "Regular",
+      "postscript": "BricolageGrotesque96ptExtraBold-Regular",
+      "weight": 800,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawDFXphjhQYrcK.woff2",
+      "family": "Bricolage Grotesque 96pt",
+      "rawFamily": "Bricolage Grotesque 96pt ExtraBold",
+      "subfamily": "Regular",
+      "postscript": "BricolageGrotesque96ptExtraBold-Regular",
+      "weight": 800,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawDVXphjhQYrcK.woff2",
+      "family": "Bricolage Grotesque 96pt",
+      "rawFamily": "Bricolage Grotesque 96pt ExtraBold",
+      "subfamily": "Regular",
+      "postscript": "BricolageGrotesque96ptExtraBold-Regular",
+      "weight": 800,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "geist_latin-s.p.0wo2-3x5um7b1.woff2",
+      "family": "Geist",
+      "rawFamily": "Geist",
+      "subfamily": "Regular",
+      "postscript": "Geist-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "geist_mono_latin-s.p.0huioiwet2vx9.woff2",
+      "family": "Geist Mono",
+      "rawFamily": "Geist Mono",
+      "subfamily": "Regular",
+      "postscript": "GeistMono-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [
+        "wght"
+      ],
+      "identified": true,
+      "isIcon": false
+    }
+  ],
+  "families": [
+    {
+      "family": "Bricolage Grotesque 96pt",
+      "weights": [
+        800
+      ],
+      "variable": true,
+      "fileCount": 3,
+      "files": [
+        "3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawA1XphjhQYg.woff2",
+        "3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawDFXphjhQYrcK.woff2",
+        "3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawDVXphjhQYrcK.woff2"
+      ]
+    },
+    {
+      "family": "Geist",
+      "weights": [
+        400
+      ],
+      "variable": true,
+      "fileCount": 1,
+      "files": [
+        "geist_latin-s.p.0wo2-3x5um7b1.woff2"
+      ]
+    },
+    {
+      "family": "Geist Mono",
+      "weights": [
+        400
+      ],
+      "variable": true,
+      "fileCount": 1,
+      "files": [
+        "geist_mono_latin-s.p.0huioiwet2vx9.woff2"
+      ]
+    }
+  ],
+  "unidentified": [],
+  "meta": {
+    "generatedAt": "2026-11-08T20:56:42.335Z",
+    "tool": "fontkit"
+  }
+}

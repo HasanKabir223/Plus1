@@ -1,0 +1,275 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "Bricolage Grotesque",
+      "fontSize": "54px",
+      "fontWeight": "700",
+      "lineHeight": "55.08px",
+      "letterSpacing": "-1.62px",
+      "color": "#FFFFFF",
+      "sampleText": "Your agent finds your people, so you don't have to cold-mess"
+    },
+    {
+      "role": "heading",
+      "fontFamily": "Bricolage Grotesque",
+      "fontSize": "42px",
+      "fontWeight": "700",
+      "lineHeight": "44.1px",
+      "letterSpacing": "-0.84px",
+      "color": "#111111",
+      "sampleText": "You bring the context.Your agent does the reaching."
+    },
+    {
+      "role": "heading-2",
+      "fontFamily": "Bricolage Grotesque",
+      "fontSize": "36px",
+      "fontWeight": "700",
+      "lineHeight": "39.6px",
+      "letterSpacing": "-0.72px",
+      "color": "#111111",
+      "sampleText": "What people use it for"
+    },
+    {
+      "role": "body",
+      "fontFamily": "geist",
+      "fontSize": "18px",
+      "fontWeight": "400",
+      "lineHeight": "28.8px",
+      "letterSpacing": "-0.176px",
+      "color": "#FFFFFF",
+      "sampleText": "Make a profile, shape an agent with a plain skill file, and "
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "geist",
+      "fontSize": "17px",
+      "fontWeight": "600",
+      "lineHeight": "25.5px",
+      "letterSpacing": "-0.34px",
+      "color": "#111111",
+      "sampleText": "Make a profile that feels like you."
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "Bricolage Grotesque",
+      "fontSize": "17px",
+      "fontWeight": "700",
+      "lineHeight": "25.5px",
+      "letterSpacing": "-0.17px",
+      "color": "#111111",
+      "sampleText": "Find teammates"
+    },
+    {
+      "role": "link",
+      "fontFamily": "geist",
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.176px",
+      "color": "#FFFFFF",
+      "sampleText": "How it works"
+    },
+    {
+      "role": "label",
+      "fontFamily": "geist",
+      "fontSize": "13px",
+      "fontWeight": "600",
+      "lineHeight": "19.5px",
+      "letterSpacing": "-0.176px",
+      "color": "#111111",
+      "sampleText": "01The premise"
+    },
+    {
+      "role": "code",
+      "fontFamily": "geistMono",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "18px",
+      "letterSpacing": "-0.176px",
+      "color": "#111111",
+      "sampleText": "Be warm. Ask good questions. Never oversell me."
+    }
+  ],
+  "spacing": {
+    "observed": [
+      2,
+      4,
+      5,
+      6,
+      8,
+      9,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      28
+    ],
+    "baseUnit": 8
+  },
+  "radius": [
+    "12px",
+    "999px"
+  ],
+  "shadows": [],
+  "buttons": [
+    {
+      "label": "Get Started→",
+      "background": "#2B4CFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "9px 16px",
+      "borderRadius": "999px",
+      "border": "1px solid rgb(43, 76, 255)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "height": "41px"
+    },
+    {
+      "label": "Create your agent →See how it works",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#111111",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(17, 17, 17)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "48.5px"
+    },
+    {
+      "label": "See how it works",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#111111",
+      "padding": "12px 22px",
+      "borderRadius": "999px",
+      "border": "1px solid rgb(17, 17, 17)",
+      "boxShadow": "none",
+      "fontSize": "15px",
+      "fontWeight": "600",
+      "height": "48.5px"
+    }
+  ],
+  "cards": [
+    {
+      "label": "card",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#111111",
+      "padding": "0px",
+      "borderRadius": "12px",
+      "border": "1px solid rgb(230, 230, 225)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "126px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#111111",
+      "padding": "20px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(17, 17, 17)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "124px"
+    },
+    {
+      "label": "card",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#111111",
+      "padding": "40px",
+      "borderRadius": "12px",
+      "border": "1px solid rgb(17, 17, 17)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "226.984px"
+    }
+  ],
+  "nav": {
+    "label": "navigation",
+    "background": "#060F2E",
+    "backgroundImage": "",
+    "backdropFilter": "",
+    "color": "#111111",
+    "padding": "0px",
+    "borderRadius": "0px",
+    "border": "",
+    "boxShadow": "none",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "height": "61px"
+  },
+  "chips": [
+    {
+      "label": "Scout · @scout.agent",
+      "background": "#C6F432",
+      "color": "#111111",
+      "padding": "4px 12px",
+      "borderRadius": "999px",
+      "border": "1px solid rgb(198, 244, 50)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "height": "28px"
+    },
+    {
+      "label": "Agent",
+      "background": "#C6F432",
+      "color": "#111111",
+      "padding": "3px 8px",
+      "borderRadius": "999px",
+      "border": "0px none rgb(17, 17, 17)",
+      "boxShadow": "none",
+      "fontSize": "11px",
+      "fontWeight": "700",
+      "height": "22.5px"
+    },
+    {
+      "label": "buildersAILooking for: t",
+      "background": "transparent",
+      "color": "#111111",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(17, 17, 17)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "28px"
+    },
+    {
+      "label": "builders",
+      "background": "transparent",
+      "color": "#111111",
+      "padding": "4px 12px",
+      "borderRadius": "999px",
+      "border": "1px solid rgb(230, 230, 225)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "500",
+      "height": "28px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [],
+  "backgrounds": [],
+  "glass": []
+}

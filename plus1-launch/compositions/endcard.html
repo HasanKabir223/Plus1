@@ -1,0 +1,158 @@
+<template>
+  <style>
+    @font-face { font-family: 'Bricolage Grotesque'; font-style: normal; font-weight: 700; font-display: swap; src: url('assets/fonts/3y9H6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiawA1XphjhQYg.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: 'Geist'; font-style: normal; font-weight: 600; font-display: swap; src: url('assets/fonts/geist_latin-s.p.0wo2-3x5um7b1.woff2') format('woff2'); }
+    @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('assets/fonts/geist_mono_latin-s.p.0huioiwet2vx9.woff2') format('woff2'); }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #ffffff;
+      font-family: 'Geist', system-ui, sans-serif;
+    }
+    .end-iris {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+      clip-path: circle(0% at 960px 300px);
+    }
+    .end-mark {
+      position: absolute;
+      left: 770px;
+      top: 150px;
+      width: 380px;
+      border-radius: 28px;
+    }
+    .end-mark img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 28px;
+    }
+    .end-word {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 500px;
+      text-align: center;
+      font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+      font-size: 96px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #111111;
+      clip-path: inset(0 100% 0 0);
+    }
+    .end-cta {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 650px;
+      text-align: center;
+    }
+    .end-btn {
+      display: inline-block;
+      background: #2b4cff;
+      color: #ffffff;
+      border-radius: 999px;
+      padding: 20px 44px;
+      font-size: 40px;
+      font-weight: 600;
+    }
+    .end-url {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 770px;
+      text-align: center;
+      font-family: 'Geist Mono', monospace;
+      font-size: 28px;
+      color: #2b4cff;
+    }
+    .end-cursor {
+      position: absolute;
+      left: 960px;
+      top: 300px;
+      width: 110px;
+      height: 110px;
+    }
+  </style>
+  <div id="root" data-composition-id="endcard" data-width="1920" data-height="1080">
+    <div id="end-stage" class="clip" data-start="0" data-duration="3" data-track-index="1">
+      <div class="end-iris">
+        <div id="end-mark" class="end-mark"><img src="assets/logo.png" alt="Plus1 mark" /></div>
+        <div id="end-word" class="end-word">Plus1</div>
+        <div id="end-cta" class="end-cta"><span id="end-btn" class="end-btn">Create your agent →</span></div>
+        <div id="end-url" class="end-url">plus1-lime.vercel.app</div>
+      </div>
+    </div>
+    <div id="end-cursor" class="clip" data-start="0.2" data-duration="2.8" data-track-index="2">
+      <div class="end-cursor">
+        <svg viewBox="0 0 24 24" width="110" height="110"><path d="M5 3 L19 12 L12 13.5 L9.5 20 Z" fill="#111111" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo(
+      "#end-stage .end-iris",
+      { clipPath: "circle(0% at 960px 300px)" },
+      { clipPath: "circle(75% at 960px 300px)", duration: 0.3, ease: "expo.out" },
+      0,
+    );
+    tl.fromTo(
+      "#end-cursor .end-cursor",
+      { x: 1090, y: 650 },
+      { x: 0, y: 0, duration: 0.35, ease: "power1.inOut" },
+      0.2,
+    );
+    tl.fromTo(
+      "#end-mark",
+      { scale: 1 },
+      { scale: 0.94, duration: 0.08, ease: "power2.in", immediateRender: false },
+      0.6,
+    );
+    tl.fromTo(
+      "#end-mark",
+      { scale: 0.94 },
+      { scale: 1, duration: 0.08, ease: "power2.out", immediateRender: false },
+      0.68,
+    );
+    tl.fromTo(
+      "#end-mark",
+      { boxShadow: "0px 0px 0px rgba(17,17,17,0)" },
+      { boxShadow: "3px 3px 0px rgba(17,17,17,1)", duration: 0.1, ease: "power1.out", immediateRender: false },
+      0.6,
+    );
+    tl.fromTo(
+      "#end-word",
+      { clipPath: "inset(0% 100% 0% 0%)" },
+      { clipPath: "inset(0% 0% 0% 0%)", duration: 0.4, ease: "expo.out" },
+      0.7,
+    );
+    tl.fromTo(
+      "#end-cta",
+      { y: 30, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.4, ease: "expo.out" },
+      1.0,
+    );
+    tl.fromTo(
+      "#end-url",
+      { y: 30, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.4, ease: "expo.out" },
+      1.1,
+    );
+    tl.fromTo(
+      "#end-cursor .end-cursor",
+      { x: 0, y: 0 },
+      { x: 220, y: 400, duration: 0.7, ease: "power1.inOut", immediateRender: false },
+      0.75,
+    );
+    tl.fromTo(
+      "#end-btn",
+      { boxShadow: "0px 0px 0px rgba(17,17,17,0)" },
+      { boxShadow: "3px 3px 0px rgba(17,17,17,1)", duration: 0.15, ease: "power1.out", immediateRender: false },
+      1.6,
+    );
+    window.__timelines["endcard"] = tl;
+  </script>
+</template>
